@@ -75,7 +75,7 @@ sequenceDiagram
 
     Note over U,S: uso (sem nova descoberta, server sem estado)
     U->>C: "use o eco com Olá!"
-    C->>S: stdin: tools/call eco {texto} (id 1, _meta com toolUseId)
+    C->>S: stdin: tools/call eco com texto "Olá!" (id 1, _meta com toolUseId)
     S-->>C: stdout: content "Olá!" (+ flush)
     U->>C: "outro eco"
     C->>S: stdin: tools/call (id 2)
@@ -85,7 +85,7 @@ sequenceDiagram
     alt sessão encerrada
         C->>S: fecha stdin (EOF) → server sai do laço
     else server morre (kill)
-        S--xC: stdout fecha → cliente lê EOF, marca desconectado,<br/>ferramenta some; volta só com /mcp → reconnect (ids recomeçam do 0)
+        S--xC: stdout fecha → cliente lê EOF e marca desconectado.<br/>A ferramenta some e só volta com /mcp → reconnect (ids recomeçam do 0)
     end
 ```
 
