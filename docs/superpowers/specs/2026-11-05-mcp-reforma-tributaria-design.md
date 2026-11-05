@@ -1,0 +1,239 @@
+# P2: MCP server de legislação da reforma tributária (design)
+
+- **Data:** 2026-11-05
+- **Status:** aprovado em conversa; aguardando revisão desta spec escrita
+- **Roadmap:** Fase 2 (engenharia de contexto e harness), projeto P2. Ver `CLAUDE.md`.
+
+## 1. Objetivo e critério de concluído
+
+Um MCP server que busca dispositivos da reforma tributária e responde **sempre** com o dispositivo citado e a data a partir da qual ele produz efeitos, em formato estruturado e verificável, mais uma skill que o usa e um hook que bloqueia uma ação proibida.
+
+Critério de concluído (do roadmap, não negociável):
+
+1. O mesmo server funciona no Claude Code e no Kiro.
+2. Um hook bloqueia uma ação proibida.
+3. Há uma skill que usa o server.
+
+**Decisão sobre o critério 1:** o Kiro fica **adiado, não removido**. O foco agora é o Claude Code. O server não terá nada específico do Claude Code (stdio, ferramentas MCP padrão, sem dependência de recursos do cliente), e o teste no Kiro é um passo isolado no final (passo 14), sem refatoração prevista.
+
+### Forma de trabalho
+
+- Um passo pequeno por vez: branch própria, commit, tag `step-NN`, nota `docs/steps/NN-nome.md` (seções `## O que mudou`, `## Como rodar`, `## O que observar`, `## Pergunta de previsão`) e merge em `main`. Depois de cada passo, para e espera o usuário estudar.
+- Código com comentários didáticos (o porquê, não só o quê).
+- Diagramas mermaid ao fim de cada bloco de passos, em `docs/diagramas/`.
+- Execução dos passos com MeisterRouter (`meister orchestrate`), conforme as instruções globais do usuário. Documentação pode ser editada direto.
+
+## 2. Decisões e alternativas descartadas
+
+| Tema | Decisão | Descartado e por quê |
+|---|---|---|
+| Corpus | EC 132/2023 primeiro; capítulos da LC 214/2025 num passo posterior | LC 214 inteira desde o início: grande demais para passos pequenos |
+| Unidade do corpus | Dispositivos da CF/ADCT incluídos ou alterados pela EC 132, cada nível (artigo, parágrafo, inciso, alínea) como registro, com `origem`; mais os artigos autônomos da EC | Texto da EC como publicado: citação estranha e blocos enormes. CF inteira: fora do tema |
+| Data que importa | Produção de efeitos (`efeitos_desde`/`efeitos_ate`); entrada em vigor fica como contexto (`vigor_desde`) | Um único campo "vigência": confunde vigor com efeito |
+| Datas de efeito | Automáticas a partir do artigo de vigência da EC, com arquivo de correções para exceções; o que o parser não resolve fica `indeterminado` | Anotação manual de tudo: o usuário não quer. Parser sem fallback: chuta datas |
+| Ferramentas | Duas: `buscar_dispositivos` e `obter_dispositivo` | Ferramenta de vigência separada: redundante. Ferramenta única: opaca e difícil de avaliar |
+| Busca | Lexical, determinística (BM25 implementado no projeto) | Embeddings ou LLM no server: não determinístico, exige rede ou modelo |
+| Protocolo | Passo didático com MCP feito à mão (descartável) e depois o server real com o SDK oficial | Só na mão: risco de quebrar compatibilidade. Só SDK: perde a visão do protocolo |
+| Transporte | stdio | HTTP: exige servidor rodando, sem ganho aqui |
+| Ação proibida | CPF/CNPJ nos argumentos de ferramentas, bloqueado por hook e também dentro do server | Escrita no corpus; resposta sem citação (texto livre, falsos positivos) |
+| Skill | Uma skill de consulta citada, com a linha do tempo como exemplo interno | Skill de linha do tempo separada: estreita |
+| Instruções no retorno da ferramenta | Não: o retorno só tem dados estruturados | Instruções no retorno misturam o canal de instrução com o de dado, que é o vetor do P4 |
+| `instructions` do server MCP | Não por enquanto | Pode entrar depois como experimento (comparar com a skill no P3) |
+
+## 3. Fatos verificados (2026-11-05)
+
+Verificados nesta data, com as fontes indicadas. Cada passo que depende deles confere de novo na fonte primária antes de implementar.
+
+- **EC 132/2023, art. 23:** a emenda entra em vigor na data da publicação (DOU de 21/12/2023) e escalona efeitos por **artigo da emenda**: arts. 3º e 11 em 2027; arts. 4º e 5º em 2033; os demais na publicação. Fonte do texto: `https://www.planalto.gov.br/ccivil_03/constituicao/emendas/emc/emc132.htm` (a ser baixada no passo 03). Consequência de design: a data de efeito de um dispositivo da CF/ADCT se determina pelo artigo da EC que o inclui ou altera, o que simplifica o parser de efeitos.
+- **MCP, revisão 2026-07-28 (stateless):** remove o handshake `initialize`/`initialized` e a sessão; cada requisição carrega versão e capacidades em `_meta`, com descoberta via `server/discover`. Clientes podem cair para `initialize` com servers antigos. **Não sabemos qual revisão o Claude Code fala via stdio:** o passo 01 descobre isso registrando as mensagens reais antes de respondê-las.
+- **SDK Python do MCP v2.x:** suporta a revisão 2026-07-28 e as anteriores; `FastMCP` foi renomeado para `MCPServer`; há um `Client` oficial que conecta via stdio. Dependência: `mcp>=2,<3`.
+- **Hooks do Claude Code:** em `PreToolUse`, sair com **código 2** bloqueia a chamada e o stderr volta ao modelo como motivo; JSON na saída só é lido com código 0. O matcher é comparado com o nome da ferramenta (sensível a maiúsculas); ferramentas MCP aparecem como `mcp__<server>__<ferramenta>`. Confirmar a forma exata com `/hooks` no passo 11.
+- **Skills do Claude Code:** pasta com `SKILL.md` (frontmatter YAML + markdown); a `description` decide quando a skill é carregada. Local do projeto: `.claude/skills/<nome>/SKILL.md`. Conferir os campos em `code.claude.com/docs/en/skills` no passo 12.
+- **CNPJ alfanumérico (IN RFB 2.229/2024, a partir de julho de 2026):** 14 posições; as 12 primeiras podem ter letras A–Z; os 2 DVs continuam numéricos; o DV usa o mesmo módulo 11, com o valor de cada caractere igual ao código ASCII menos 48 (dígitos mantêm o valor atual). Conferir no manual de cálculo do DV da RFB no passo 02.
+
+## 4. Arquitetura
+
+Princípio: **lógica separada do protocolo.** As ferramentas são funções Python puras (argumentos → dicionário), testáveis sem MCP. O server é uma camada fina que só as expõe via stdio.
+
+```
+projeto02/
+├── pyproject.toml            # uv, Python 3.13; deps: mcp>=2,<3, pyyaml; dev: pytest
+├── .mcp.json                 # registra o server no Claude Code (nível projeto)
+├── .claude/
+│   ├── settings.json         # hook PreToolUse
+│   └── skills/consultar-reforma-tributaria/SKILL.md
+├── corpus/
+│   ├── raw/ec132-2023.html   # fonte baixada uma vez (versionada)
+│   ├── raw/ec132-2023.meta.json  # url, coletado_em, sha256
+│   ├── dispositivos.json     # gerado pela ingestão (versionado)
+│   └── efeitos_correcoes.yaml
+├── src/taxlaw/
+│   ├── ingest/
+│   │   ├── fetch.py          # único módulo com acesso à rede
+│   │   ├── structure.py      # HTML → dispositivos
+│   │   ├── effects.py        # artigo de vigência → datas de efeito
+│   │   └── build.py          # junta tudo + correções → dispositivos.json + relatório
+│   ├── guard.py              # detecção de CPF/CNPJ (server e hook)
+│   ├── search.py             # BM25
+│   ├── tools.py              # buscar_dispositivos / obter_dispositivo
+│   └── server.py             # MCPServer via stdio
+├── hooks/block_taxpayer_ids.py
+├── echo/echo_server.py       # passo didático, descartável
+├── tests/
+└── docs/{steps,diagramas,superpowers/specs,superpowers/plans}/
+```
+
+- Corpus versionado no git (HTML bruto e JSON gerado): server e testes nunca acessam a rede, e o diff mostra quando o texto mudou.
+- Uma única `guard.py` para hook e server: as duas guardas não divergem.
+- Identificadores de código em inglês; nomes e campos das ferramentas expostas ao modelo em português.
+
+## 5. Ingestão
+
+Pipeline sob demanda (`uv run python -m taxlaw.ingest.build`), não a cada consulta:
+
+```
+fetch (rede) → structure (puro) → effects (puro) → build (puro + correções)
+```
+
+1. **fetch:** baixa o HTML oficial e grava `raw/ec132-2023.html` e `raw/ec132-2023.meta.json` (url, `coletado_em`, sha256). O build lê `coletado_em` desse arquivo, nunca do relógio.
+2. **structure:** extrai os blocos citados da CF/ADCT dentro dos artigos da EC e os artigos autônomos da EC. Cada nível vira um registro com `pai`. Usa as marcas "(NR)" (nova redação → `alteracao: "alterado"`) e "(AC)" (acréscimo → `alteracao: "incluido"`). Lida com encoding antigo (`windows-1252`). Biblioteca padrão apenas (`html.parser` + `re`); se o HTML se mostrar irregular demais, a troca por outra biblioteca é decidida com o usuário.
+3. **effects:** lê o art. 23 da EC e produz `artigo_da_EC → (efeitos_desde, efeitos_ate, fundamento)`. Cada dispositivo herda a data do artigo da EC que o inclui ou altera. Datas de ano sem dia ("a partir de 2027") viram o primeiro dia do ano, com essa regra documentada no código. O que o parser não reconhecer com segurança fica `metodo: "indeterminado"`; nunca cai silenciosamente na regra geral do caput.
+4. **build:** aplica `efeitos_correcoes.yaml` (vence o automático; toda correção exige `fundamento`), grava `dispositivos.json` ordenado e determinístico, e imprime um relatório (total, contagem por método, lista de indeterminados). Aborta se faltar estrutura mínima esperada (por exemplo, nenhum `CF.art156-A`).
+
+### Modelo de um dispositivo
+
+```json
+{
+  "id": "CF.art156-A.par1.incII",
+  "citacao": "CF, art. 156-A, § 1º, II",
+  "norma": "CF",
+  "pai": "CF.art156-A.par1",
+  "origem": "EC 132/2023, art. 1º",
+  "alteracao": "incluido",
+  "texto": "...",
+  "vigor_desde": "2023-12-21",
+  "efeitos_desde": "2023-12-21",
+  "efeitos_ate": null,
+  "fundamento_efeitos": "EC 132/2023, art. 23, caput",
+  "metodo": "automatico",
+  "fonte_url": "https://www.planalto.gov.br/...",
+  "coletado_em": "2026-11-05"
+}
+```
+
+- `metodo`: `automatico` | `correcao` | `indeterminado`. Com `indeterminado`, `efeitos_desde` é `null`.
+- `efeitos_ate`: `null` significa "sem término conhecido".
+
+### Limites conhecidos
+
+- **Redação anterior não incluída.** Para dispositivos `alterado`, antes de `efeitos_desde` valia outra redação, que não está no corpus. A ferramenta diz isso explicitamente.
+- **Efeito da norma não é cobrança do tributo.** Um dispositivo pode produzir efeitos desde 2023 (por exemplo, o que institui um tributo) enquanto a cobrança começa anos depois, por regras de transição do ADCT, que são outros dispositivos. O server responde o que o texto diz sobre cada dispositivo; juntar as peças é tarefa da skill e do modelo, e um ponto de avaliação do P3.
+- Fora do escopo agora: LC 214 (passo 13), atualização automática da fonte.
+
+## 6. Ferramentas
+
+Ambas devolvem JSON estruturado (`structuredContent` com `outputSchema` e o mesmo JSON serializado como texto). O retorno só contém dados, nunca frases imperativas.
+
+### `buscar_dispositivos`
+
+| Entrada | Tipo | Regra |
+|---|---|---|
+| `consulta` | texto | obrigatória, 1 a 500 caracteres |
+| `data_referencia` | data ISO | opcional; ausente → data de hoje, ecoada na resposta |
+| `limite` | inteiro | padrão 5, de 1 a 10 |
+
+Saída: `encontrado`, `consulta`, `data_referencia`, `resultados[]` (cada um com `id`, `citacao`, `trecho` de até 300 caracteres, `pontuacao` e `efeitos{desde, ate, fundamento, metodo, produz_efeitos_na_data}`) e `corpus{versao, coletado_em}`. Sem resultado acima do limiar: `encontrado: false`, `resultados: []`, `motivo`.
+
+### `obter_dispositivo`
+
+Entrada: `id` (obrigatório), `data_referencia` (opcional, mesma regra), `incluir_filhos` (padrão `true`).
+
+Saída: `encontrado`, `id`, `citacao`, `norma`, `origem`, `alteracao`, `texto`, `filhos[]`, `vigor_desde`, `efeitos{...}`, `observacao`, `truncado`, `fonte_url`, `corpus{...}`. Id inexistente: `encontrado: false`.
+
+### Regras
+
+- `produz_efeitos_na_data`: `true`, `false` ou `null` (indeterminado). Nunca `false` no lugar de "não sei".
+- `observacao` para `alterado` com `data_referencia < efeitos_desde`: "redação anterior não incluída no corpus".
+- **Limiar de pontuação** calibrado com casos de teste: consulta fora do tema → `encontrado: false`.
+- **"Não encontrei" é sucesso.** `isError` só para entrada inválida (códigos `entrada_invalida`) e para o bloqueio de CPF/CNPJ (código `dados_de_contribuinte`).
+- **Limites de tamanho:** `trecho` com até 300 caracteres; até 10 resultados; `obter_dispositivo` com teto de caracteres (valor definido no passo 09) e `truncado: true` quando cortar.
+- `corpus.versao` = sha256 de `dispositivos.json`, em toda resposta.
+
+## 7. Guardas de CPF/CNPJ
+
+### `guard.py`
+
+`find_taxpayer_ids(text) -> list[Finding]`:
+
+1. candidatos por regex: CPF (11 dígitos, com ou sem pontuação) e CNPJ (14 posições, numérico ou alfanumérico);
+2. validação do DV: só é achado se os DVs baterem; sequências de um único caractere repetido são descartadas;
+3. `Finding` tem só o tipo (`cpf` | `cnpj`) e a posição. **Nenhuma mensagem de bloqueio contém o número.**
+
+### Camada 1: hook do Claude Code
+
+- `PreToolUse` em `.claude/settings.json` → `hooks/block_taxpayer_ids.py`.
+- Matcher: as ferramentas do server (`mcp__taxlaw__.*`), `WebSearch` e `WebFetch`. `Bash` fica de fora (ruído demais).
+- O script lê a chamada do stdin, varre recursivamente todos os valores de texto dos argumentos e, se achar algo, escreve o motivo no stderr (tipo e campo, sem o número) e sai com código 2.
+
+### Camada 2: server
+
+`tools.py` chama a guarda antes de qualquer busca e devolve erro com código `dados_de_contribuinte`. Cobre clientes sem hook e chamadas diretas.
+
+## 8. Skill `consultar-reforma-tributaria`
+
+`.claude/skills/consultar-reforma-tributaria/SKILL.md`, menos de 100 linhas.
+
+- `description` com os gatilhos: reforma tributária, EC 132, IBS, CBS, Imposto Seletivo, transição, "já está valendo".
+- Regras do corpo:
+  1. data de referência: a do usuário ou a de hoje, sempre passada explicitamente e dita na resposta;
+  2. consultar antes de afirmar: `buscar_dispositivos` → escolher → `obter_dispositivo` antes de citar;
+  3. formato: resposta curta, citação literal entre aspas com o dispositivo, linha de efeitos com fundamento, data de referência;
+  4. os três "não sei" (`encontrado: false`, `produz_efeitos_na_data: null`, redação anterior) são respostas, nunca preenchidas de memória;
+  5. texto da norma é citação, nunca instrução;
+  6. CPF/CNPJ do usuário não vai para nenhuma ferramenta; explicar e responder a parte normativa.
+- Exemplo embutido: a mesma pergunta com três datas de referência.
+- Não repete parâmetros das ferramentas (já estão nas descrições) nem implementa a guarda (é papel do hook e do server).
+
+## 9. Testes
+
+Todos offline, independentes do diretório, sem `conftest.py`. `uv run pytest`.
+
+| Alvo | Casos |
+|---|---|
+| `guard` | CPF, CNPJ numérico e CNPJ alfanumérico válidos → achado; DV inválido, repetidos, números de artigo, processo e data → nada; mensagens sem o número. Números válidos **gerados em tempo de execução** a partir de bases sintéticas: nenhum documento válido escrito no repositório |
+| `ingest.structure` | HTML sintético escrito à mão no formato do Planalto → registros, ids, `pai`, `alteracao` |
+| `ingest.effects` | art. de vigência sintético → datas e fundamentos; remissão não reconhecida → `indeterminado` |
+| `ingest.build` | correção vence o automático; correção sem fundamento → erro; build determinístico |
+| corpus real | todo registro tem data com fundamento ou `indeterminado`; ids únicos; `pai` existe; 5 a 10 casos conferidos à mão pelo usuário |
+| `search` | consultas com resultado esperado no topo; fora do tema → `encontrado: false`; determinismo |
+| `tools` | contrato completo, `data_referencia` ecoada, três estados de efeito, truncamento, códigos de erro |
+| `server` | sobe via stdio com o `Client` do SDK; lista as duas ferramentas; `tools/call` igual a `tools.py` |
+| `hook` | JSON no stdin → código 2 e motivo sem o número; chamada limpa → código 0; argumento aninhado varrido |
+
+Sem testes que chamem LLM: a avaliação do comportamento do modelo é o P3. Verificação manual em sessão do Claude Code nos passos 10, 11 e 12.
+
+## 10. Sequência de passos
+
+| Bloco | Passo | Conteúdo |
+|---|---|---|
+| 0 Fundação | 00 | git, `.gitignore`, `pyproject.toml`, README esqueleto, `AGENTS.md` preenchido, repo público no GitHub (`.meister/` já inicializado) |
+| 1 MCP | 01 | eco MCP feito à mão via stdio, com log de cada mensagem; descobre qual revisão do protocolo o Claude Code usa. *Diagrama: ciclo de uma conexão MCP* |
+| 2 Corpus | 02 | `guard.py` + gerador de números de teste |
+| | 03 | `fetch` da EC 132 + `meta.json` |
+| | 04 | `structure` com fixture sintética |
+| | 05 | `structure` no HTML real |
+| | 06 | `effects` |
+| | 07 | `build`, correções, `dispositivos.json`, casos conferidos à mão. *Diagramas: pipeline e modelo de dados* |
+| 3 Server | 08 | `search` (BM25 + limiar) |
+| | 09 | `tools.py` |
+| | 10 | `server.py` + `.mcp.json`; primeira consulta real. *Diagrama: sequência de consulta* |
+| 4 Harness | 11 | hook `PreToolUse` (critério 2) |
+| | 12 | skill (critério 3); consulta com e sem a skill. *Diagrama: guardas* |
+| 5 Depois | 13 | capítulos da LC 214 |
+| | 14 | Kiro (critério 1) |
+| | 15 | README de decisões e limites + "o que deu errado" |
+
+## 11. Ligação com P3 e P4
+
+- **P3 (evals):** respostas estruturadas com `citacao`, `efeitos`, `data_referencia` e `corpus.versao`; "não encontrei" distinto de erro; comparação com e sem skill.
+- **P4 (injeção):** o texto da norma volta só no campo `texto`/`trecho`; o retorno não contém instruções; a guarda de CPF/CNPJ é um alvo explícito de contorno (formatação, CNPJ alfanumérico, argumentos aninhados).
