@@ -1,0 +1,12 @@
+# Segredos: nunca vão para o repositório.
+.env
+
+# Traces e execuções locais (ex.: log de mensagens MCP do passo 01).
+traces/
+runs/
+
+# Ambiente e caches do Python.
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

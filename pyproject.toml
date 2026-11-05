@@ -1,0 +1,25 @@
+# Configuração do projeto P2: MCP server de legislação da reforma tributária.
+# O layout src/ evita que os testes importem o código "por acaso" a partir
+# do diretório atual: só funciona se o pacote estiver instalado de verdade.
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "taxlaw"
+version = "0.1.0"
+description = "MCP server de legislação pública da reforma tributária (EC 132/2023)"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/taxlaw"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
