@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "eco": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "--quiet", "python", "echo/echo_server.py"]
+    }
+  }
+}
