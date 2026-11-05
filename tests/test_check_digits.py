@@ -4,21 +4,8 @@ Nenhum CPF/CNPJ válido aparece escrito aqui: só bases inventadas, e os
 números completos são gerados em tempo de execução.
 """
 
-from pathlib import Path
 import random
 import re
-import sys
-
-# Garante que o pacote em src/ seja encontrado mesmo quando o pytest é
-# invocado a partir do ambiente virtual do repositório base durante o gate.
-_SRC = str(Path(__file__).resolve().parent.parent / "src")
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
-
-if "taxlaw" in sys.modules:
-    mod = sys.modules["taxlaw"]
-    if getattr(mod, "__file__", None) and not mod.__file__.startswith(_SRC):
-        del sys.modules["taxlaw"]
 
 import pytest
 
