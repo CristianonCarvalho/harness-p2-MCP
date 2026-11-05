@@ -56,6 +56,41 @@ Sequência no `traces/echo.jsonl`:
 - **Quebra de linha no texto não quebra o stdio:** o `\n` vai escapado dentro da string JSON, e a mensagem continua ocupando uma linha.
 - **Nome da ferramenta no cliente:** o server expõe `eco`, e o Claude Code a mostra ao modelo como `mcp__eco__eco` (`mcp__<server>__<ferramenta>`).
 
+### Diagrama: ciclo de uma conexão MCP (stdio, revisão 2026-07-28)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as Usuário
+    participant C as Claude Code (processo pai)
+    participant S as echo_server.py (processo filho)
+
+    Note over C,S: abertura da sessão
+    C->>S: inicia uv run python echo/echo_server.py<br/>(fd 0/1/2 ligados ao pai)
+    C->>S: stdin: server/discover (id "server-discover-probe-1", _meta com versão)
+    S-->>C: stdout: supportedVersions, capabilities
+    C->>S: stdin: tools/list (id 0)
+    S-->>C: stdout: [eco] com description e inputSchema
+    Note over C: guarda a lista em cache e mostra ao modelo como mcp__eco__eco
+
+    Note over U,S: uso (sem nova descoberta, server sem estado)
+    U->>C: "use o eco com Olá!"
+    C->>S: stdin: tools/call eco {texto} (id 1, _meta com toolUseId)
+    S-->>C: stdout: content "Olá!" (+ flush)
+    U->>C: "outro eco"
+    C->>S: stdin: tools/call (id 2)
+    S-->>C: stdout: resposta (id 2)
+
+    Note over C,S: fim
+    alt sessão encerrada
+        C->>S: fecha stdin (EOF) → server sai do laço
+    else server morre (kill)
+        S--xC: stdout fecha → cliente lê EOF, marca desconectado,<br/>ferramenta some; volta só com /mcp → reconnect (ids recomeçam do 0)
+    end
+```
+
+Cada seta é uma linha de JSON no canal, terminada em `\n`. Quem lê junta os bytes até o `\n`, porque o canal pode entregar uma mensagem em pedaços.
+
 **Quem inicia o server:** o Claude Code, como processo filho (`claude` → `uv run ...` → `python echo/echo_server.py`), com stdin, stdout e stderr ligados por sockets unix anônimos. Nenhuma porta TCP é aberta.
 
 **Experimento: matar o server.** Previsão: "o Claude Code inicia o server de novo sozinho". Resultado: **não inicia.** Com `kill` no Python, o `uv` saiu junto, o server ficou desconectado e a ferramenta sumiu da lista do modelo (nem chega a falhar, deixa de existir). Só voltou com `/mcp` → reconnect.
