@@ -1,0 +1,94 @@
+# meister.config.yaml — Local MeisterRouter configuration for this project.
+#
+# The workers.tier_order list below REPLACES the entire default list.
+# To check active lanes and costs: meister models
+# To validate this file: meister config validate
+
+router:
+  # router.mode: jev selects the initial lane via the Decisions API (OpenRouter);
+  # router.mode: first skips Jev and uses the first active lane below, without network calls.
+  mode: jev
+  timeout_seconds: 10
+  max_attempts: 2
+  unavailable_cooldown_seconds: 300
+  context_max_chars: 4000
+
+workers:
+  # The order defines the fallback chain (always forward).
+  # enabled: false disables a lane in automatic routing.
+  # eligible_classes restricts the classes (SMALL, MEDIUM, HIGH, ESCALATE) Jev can assign to the lane.
+  tier_order:
+    # tier_1 uses the <=100k token band; above 100k the combined price is USD 1.00.
+    - name: tier_1
+      harness: copilot
+      model: claude-haiku-5.5
+      cost_per_m_tokens: 0.20
+      credit_usd: 0.01
+      max_retries: 2
+      best_for:
+        - small_edits
+        - single_file
+        - css_fixes
+        - unit_test_additions
+
+    - name: tier_1b
+      harness: copilot
+      model: gpt-6-luna
+      cost_per_m_tokens: 0.20
+      credit_usd: 0.01
+      max_retries: 2
+      best_for:
+        - small_edits
+        - single_file
+        - css_fixes
+        - unit_test_additions
+
+    - name: tier_1c
+      harness: codex
+      model: gpt-6-luna
+      cost_per_m_tokens: 0.20
+      max_retries: 2
+      best_for:
+        - small_edits
+        - single_file
+        - css_fixes
+        - unit_test_additions
+
+    - name: tier_2
+      harness: agy
+      model: gemini-3.8-flash-high
+      cost_per_m_tokens: 1.50
+      max_retries: 2
+      best_for:
+        - deep_reasoning
+        - complex_algorithms
+        - hard_bugs
+
+    - name: tier_3
+      harness: claude
+      model: sonnet
+      cost_per_m_tokens: 4.00
+      max_retries: 1
+      best_for:
+        - architectural_recovery
+        - systemic_regressions
+      eligible_classes:
+        - ESCALATE
+
+    - name: tier_3b
+      harness: claude
+      model: opus
+      enabled: false
+      cost_per_m_tokens: 8.00
+      max_retries: 1
+      best_for:
+        - architectural_recovery
+        - systemic_regressions
+      eligible_classes:
+        - ESCALATE
+
+# O gate roda os testes num worktree novo, sem .venv. Sem instalar, ele usa o
+# Python do próprio Meister e `import taxlaw` falha (passo 00). `uv sync` cria
+# o .venv do projeto com o pacote instalado, e o gate passa a usá-lo.
+gate:
+  install: "uv sync --quiet"

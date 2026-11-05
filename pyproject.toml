@@ -22,4 +22,3 @@ packages = ["src/taxlaw"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
