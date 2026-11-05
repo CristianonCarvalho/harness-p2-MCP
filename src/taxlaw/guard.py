@@ -8,6 +8,7 @@ regex confundiria números de processo, datas e artigos com documentos.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from dataclasses import dataclass
 from typing import Literal
 
@@ -47,3 +48,60 @@ def cnpj_check_digits(base12: str) -> str:
     dv1 = _mod11_digit(values, CNPJ_DV1_WEIGHTS)
     dv2 = _mod11_digit(values + [dv1], CNPJ_DV2_WEIGHTS)
     return f"{dv1}{dv2}"
+
+
+@dataclass(frozen=True)
+class Finding:
+    """Um achado: só o tipo e a posição no texto. Nunca guarda o número."""
+
+    kind: Kind
+    start: int
+    end: int
+
+
+# Fronteiras: o candidato não pode estar colado a letra/dígito, nem a um
+# separador seguido de letra/dígito. Assim "1.234.567.890-12" não vira o CPF
+# "234.567.890-12", mas "CPF 000.000.000-00." (ponto final) ainda é candidato.
+# [0-9] e não \d: em Python, \d também casa dígitos de outros alfabetos.
+_BEFORE = r"(?<![0-9A-Za-z])(?<![0-9A-Za-z][./-])"
+_AFTER = r"(?![0-9A-Za-z])(?![./-][0-9A-Za-z])"
+# Cada separador é opcional sozinho: a RFB mostra máscaras parciais como
+# "AA345678/0003-29" (Perguntas & Respostas, pergunta 23).
+_CPF_RE = re.compile(_BEFORE + r"[0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2}" + _AFTER)
+# IGNORECASE: a RFB só emite maiúsculas, mas a guarda prefere bloquear um
+# "ab.cde.fgh/0001-xx" digitado em minúsculas a deixá-lo passar.
+_CNPJ_RE = re.compile(
+    _BEFORE + r"[0-9A-Z]{2}\.?[0-9A-Z]{3}\.?[0-9A-Z]{3}/?[0-9A-Z]{4}-?[0-9]{2}" + _AFTER,
+    re.IGNORECASE,
+)
+_SEPARATORS = re.compile(r"[./-]")
+
+
+def _is_valid(compact: str, kind: Kind) -> bool:
+    """DVs corretos e não é um caractere repetido (000..., 111...: DV "válido" por acaso)."""
+    if len(set(compact)) == 1:
+        return False
+    if kind == "cpf":
+        return compact[9:] == cpf_check_digits(compact[:9])
+    return compact[12:] == cnpj_check_digits(compact[:12])
+
+
+def find_taxpayer_ids(text: str) -> list[Finding]:
+    """Todos os CPF/CNPJ com DV válido em `text`, em ordem de posição."""
+    findings: list[Finding] = []
+    for kind, pattern in (("cpf", _CPF_RE), ("cnpj", _CNPJ_RE)):
+        for match in pattern.finditer(text):
+            compact = _SEPARATORS.sub("", match.group()).upper()
+            if _is_valid(compact, kind):
+                findings.append(Finding(kind=kind, start=match.start(), end=match.end()))
+    return sorted(findings, key=lambda f: f.start)
+
+
+def describe_findings(findings: list[Finding]) -> str:
+    """Mensagem para humano ou modelo: quantos e de que tipo, sem nenhum número."""
+    if not findings:
+        return "nenhum CPF ou CNPJ encontrado"
+    counts = Counter(f.kind for f in findings)
+    parts = [f"{counts[k]} {k.upper()}" for k in ("cpf", "cnpj") if counts[k]]
+    return "possível dado de contribuinte: " + " e ".join(parts) + " (números omitidos)"
+
