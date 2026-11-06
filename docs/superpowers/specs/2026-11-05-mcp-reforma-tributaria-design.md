@@ -49,7 +49,8 @@ Verificados nesta data, com as fontes indicadas. Cada passo que depende deles co
 - **SDK Python do MCP v2.x:** suporta a revisão 2026-07-28 e as anteriores; `FastMCP` foi renomeado para `MCPServer`; há um `Client` oficial que conecta via stdio. Dependência: `mcp>=2,<3`.
 - **Hooks do Claude Code:** em `PreToolUse`, sair com **código 2** bloqueia a chamada e o stderr volta ao modelo como motivo; JSON na saída só é lido com código 0. O matcher é comparado com o nome da ferramenta (sensível a maiúsculas); ferramentas MCP aparecem como `mcp__<server>__<ferramenta>`. Confirmar a forma exata com `/hooks` no passo 11.
 - **Skills do Claude Code:** pasta com `SKILL.md` (frontmatter YAML + markdown); a `description` decide quando a skill é carregada. Local do projeto: `.claude/skills/<nome>/SKILL.md`. Conferir os campos em `code.claude.com/docs/en/skills` no passo 12.
-- **CNPJ alfanumérico (IN RFB 2.229/2024, a partir de julho de 2026):** 14 posições; as 12 primeiras podem ter letras A–Z; os 2 DVs continuam numéricos; o DV usa o mesmo módulo 11, com o valor de cada caractere igual ao código ASCII menos 48 (dígitos mantêm o valor atual). Conferir no manual de cálculo do DV da RFB no passo 02.
+- **CNPJ alfanumérico (IN RFB 2.229/2024, a partir de julho de 2026):** 14 posições; as 12 primeiras podem ter letras A–Z; os 2 DVs continuam numéricos; o DV usa o mesmo módulo 11, com o valor de cada caractere igual ao código ASCII menos 48 (dígitos mantêm o valor atual). Conferir no manual de cálculo do DV da RFB no passo 02. *(Conferido no passo 02 no "Perguntas & Respostas: CNPJ alfanumérico" da RFB, pergunta 14.)*
+- **HTML da EC 132 no Planalto (conferido em 2026-11-06 no arquivo coletado no passo 03):** página gerada pelo FrontPage, em `windows-1252` e com quebras de linha CRLF; 623 parágrafos `<p class="dou-paragraph">`; artigos da EC com âncora `<a name="art1">` a `art23`; nenhum texto tachado. Dos 58 blocos citados, 39 fecham com `" (NR)` (dispositivos que já existiam, como art. 149-A da CF e art. 76-A do ADCT) e 19 fecham só com a aspa (dispositivos novos: arts. 149-B, 149-C, Seção V-A com o art. 156-A, art. 159-A, ADCT 124 a 137). **"(AC)" não aparece.** O art. 156-A, § 1º, é citado nos arts. 1º, 3º e 4º da EC (três redações). O Planalto derruba clientes automatizados; a coleta é feita pelo navegador.
 
 ## 4. Arquitetura
 
@@ -96,8 +97,8 @@ fetch (rede) → structure (puro) → effects (puro) → build (puro + correçõ
 ```
 
 1. **fetch:** baixa o HTML oficial e grava `raw/ec132-2023.html` e `raw/ec132-2023.meta.json` (url, `coletado_em`, sha256). O build lê `coletado_em` desse arquivo, nunca do relógio.
-2. **structure:** extrai os blocos citados da CF/ADCT dentro dos artigos da EC e os artigos autônomos da EC. Cada nível vira um registro com `pai`. Usa as marcas "(NR)" (nova redação → `alteracao: "alterado"`) e "(AC)" (acréscimo → `alteracao: "incluido"`). Lida com encoding antigo (`windows-1252`). Biblioteca padrão apenas (`html.parser` + `re`); se o HTML se mostrar irregular demais, a troca por outra biblioteca é decidida com o usuário.
-3. **effects:** lê o art. 23 da EC e produz `artigo_da_EC → (efeitos_desde, efeitos_ate, fundamento)`. Cada dispositivo herda a data do artigo da EC que o inclui ou altera. Datas de ano sem dia ("a partir de 2027") viram o primeiro dia do ano, com essa regra documentada no código. O que o parser não reconhecer com segurança fica `metodo: "indeterminado"`; nunca cai silenciosamente na regra geral do caput.
+2. **structure:** extrai os blocos citados da CF/ADCT dentro dos artigos da EC e os artigos autônomos da EC. Cada nível vira um registro com `pai`. A marca do fim do bloco decide `alteracao`: `" (NR)` (nova redação) → `"alterado"`; só a aspa de fechamento, sem marca → `"incluido"`. A página não usa "(AC)" (decisão de 2026-11-06, ver seção 3). Linhas só de pontos (`.....`, `I - .....`) marcam texto omitido e não viram registro; o link "Vigência" no caput dos arts. 3º, 4º e 5º da EC é ignorado. **Um registro por versão:** o mesmo dispositivo citado em mais de um artigo da EC gera um registro para cada um, com `versao` = artigo da EC (ex.: `EC132.art3`). Lida com encoding antigo (`windows-1252`). Biblioteca padrão apenas (`html.parser` + `re`); se o HTML se mostrar irregular demais, a troca por outra biblioteca é decidida com o usuário.
+3. **effects:** lê o art. 23 da EC e produz `artigo_da_EC → (efeitos_desde, efeitos_ate, fundamento)`. Cada versão herda a data do artigo da EC que a inclui ou altera. Quando um dispositivo tem várias versões, o `efeitos_ate` de cada uma é o dia anterior ao `efeitos_desde` da versão seguinte Se a versão seguinte for `indeterminado`, o `efeitos_ate` da anterior fica `null`. Uma data de término nunca é inventada: com duas versões possíveis na mesma data, a ferramenta responde `produz_efeitos_na_data: null` para as duas. Datas de ano sem dia ("a partir de 2027") viram o primeiro dia do ano, com essa regra documentada no código. O que o parser não reconhecer com segurança fica `metodo: "indeterminado"`; nunca cai silenciosamente na regra geral do caput.
 4. **build:** aplica `efeitos_correcoes.yaml` (vence o automático; toda correção exige `fundamento`), grava `dispositivos.json` ordenado e determinístico, e imprime um relatório (total, contagem por método, lista de indeterminados). Aborta se faltar estrutura mínima esperada (por exemplo, nenhum `CF.art156-A`).
 
 ### Modelo de um dispositivo
@@ -108,6 +109,7 @@ fetch (rede) → structure (puro) → effects (puro) → build (puro + correçõ
   "citacao": "CF, art. 156-A, § 1º, II",
   "norma": "CF",
   "pai": "CF.art156-A.par1",
+  "versao": "EC132.art1",
   "origem": "EC 132/2023, art. 1º",
   "alteracao": "incluido",
   "texto": "...",
@@ -121,6 +123,7 @@ fetch (rede) → structure (puro) → effects (puro) → build (puro + correçõ
 }
 ```
 
+- **Chave = (`id`, `versao`).** O mesmo `id` pode aparecer em vários registros, um por artigo da EC que o inclui ou altera. Exemplo real: `CF, art. 156-A, § 1º` é incluído pelo art. 1º (efeitos desde a publicação), alterado pelo art. 3º (a partir de 2027) e de novo pelo art. 4º (a partir de 2033). `pai` aponta para o `id` do pai, e a versão do pai é a do mesmo artigo da EC.
 - `metodo`: `automatico` | `correcao` | `indeterminado`. Com `indeterminado`, `efeitos_desde` é `null`.
 - `efeitos_ate`: `null` significa "sem término conhecido".
 
@@ -142,15 +145,17 @@ Ambas devolvem JSON estruturado (`structuredContent` com `outputSchema` e o mesm
 | `data_referencia` | data ISO | opcional; ausente → data de hoje, ecoada na resposta |
 | `limite` | inteiro | padrão 5, de 1 a 10 |
 
-Saída: `encontrado`, `consulta`, `data_referencia`, `resultados[]` (cada um com `id`, `citacao`, `trecho` de até 300 caracteres, `pontuacao` e `efeitos{desde, ate, fundamento, metodo, produz_efeitos_na_data}`) e `corpus{versao, coletado_em}`. Sem resultado acima do limiar: `encontrado: false`, `resultados: []`, `motivo`.
+Saída: `encontrado`, `consulta`, `data_referencia`, `resultados[]` (cada um com `id`, `versao`, `citacao`, `trecho` de até 300 caracteres, `pontuacao`, `efeitos{desde, ate, fundamento, metodo, produz_efeitos_na_data}` e `outras_versoes[]` com `versao` e `efeitos{desde, ate}`) e `corpus{versao, coletado_em}`. A busca agrupa as versões de um mesmo `id` num só resultado, e mostra a versão escolhida pela regra de versão abaixo. Sem resultado acima do limiar: `encontrado: false`, `resultados: []`, `motivo`.
 
 ### `obter_dispositivo`
 
 Entrada: `id` (obrigatório), `data_referencia` (opcional, mesma regra), `incluir_filhos` (padrão `true`).
 
-Saída: `encontrado`, `id`, `citacao`, `norma`, `origem`, `alteracao`, `texto`, `filhos[]`, `vigor_desde`, `efeitos{...}`, `observacao`, `truncado`, `fonte_url`, `corpus{...}`. Id inexistente: `encontrado: false`.
+Saída: `encontrado`, `id`, `versao`, `citacao`, `norma`, `origem`, `alteracao`, `texto`, `filhos[]`, `vigor_desde`, `efeitos{...}`, `outras_versoes[]`, `observacao`, `truncado`, `fonte_url`, `corpus{...}`. Id inexistente: `encontrado: false`. Os `filhos` são os da mesma `versao`.
 
 ### Regras
+
+- **Escolha da versão pela `data_referencia`:** a versão cujo intervalo `[efeitos_desde, efeitos_ate]` contém a data. Se a data é anterior a todas as versões, devolve a primeira, com `produz_efeitos_na_data: false` e, se ela for `alterado`, a `observacao` de redação anterior. Se mais de uma versão é possível (término indeterminado), devolve a mais antiga com `produz_efeitos_na_data: null`. As demais versões aparecem sempre em `outras_versoes[]`, para o modelo ver que o texto muda com o tempo.
 
 - `produz_efeitos_na_data`: `true`, `false` ou `null` (indeterminado). Nunca `false` no lugar de "não sei".
 - `observacao` para `alterado` com `data_referencia < efeitos_desde`: "redação anterior não incluída no corpus".
@@ -201,12 +206,12 @@ Todos offline, independentes do diretório, sem `conftest.py`. `uv run pytest`.
 | Alvo | Casos |
 |---|---|
 | `guard` | CPF, CNPJ numérico e CNPJ alfanumérico válidos → achado; DV inválido, repetidos, números de artigo, processo e data → nada; mensagens sem o número. Números válidos **gerados em tempo de execução** a partir de bases sintéticas: nenhum documento válido escrito no repositório |
-| `ingest.structure` | HTML sintético escrito à mão no formato do Planalto → registros, ids, `pai`, `alteracao` |
+| `ingest.structure` | HTML sintético escrito à mão no formato do Planalto → registros, ids, `pai`, `alteracao` (`(NR)` → alterado, sem marca → incluído), linhas de pontos ignoradas, mesmo dispositivo em dois artigos da EC → duas versões |
 | `ingest.effects` | art. de vigência sintético → datas e fundamentos; remissão não reconhecida → `indeterminado` |
 | `ingest.build` | correção vence o automático; correção sem fundamento → erro; build determinístico |
 | corpus real | todo registro tem data com fundamento ou `indeterminado`; ids únicos; `pai` existe; 5 a 10 casos conferidos à mão pelo usuário |
 | `search` | consultas com resultado esperado no topo; fora do tema → `encontrado: false`; determinismo |
-| `tools` | contrato completo, `data_referencia` ecoada, três estados de efeito, truncamento, códigos de erro |
+| `tools` | contrato completo, `data_referencia` ecoada, escolha da versão pela data (antes, entre e depois das versões; término indeterminado → `null`), `outras_versoes`, três estados de efeito, truncamento, códigos de erro |
 | `server` | sobe via stdio com o `Client` do SDK; lista as duas ferramentas; `tools/call` igual a `tools.py` |
 | `hook` | JSON no stdin → código 2 e motivo sem o número; chamada limpa → código 0; argumento aninhado varrido |
 
