@@ -156,10 +156,11 @@ Saída: `encontrado`, `id`, `versao`, `citacao`, `norma`, `origem`, `alteracao`,
 
 ### Regras
 
-- **Escolha da versão pela `data_referencia`:** a versão cujo intervalo `[efeitos_desde, efeitos_ate]` contém a data. Se a data é anterior a todas as versões, devolve a primeira, com `produz_efeitos_na_data: false` e, se ela for `alterado`, a `observacao` de redação anterior. Se mais de uma versão é possível (término indeterminado), devolve a mais antiga com `produz_efeitos_na_data: null`. As demais versões aparecem sempre em `outras_versoes[]`, para o modelo ver que o texto muda com o tempo.
+- **Escolha da versão pela `data_referencia`:** a versão cujo intervalo `[efeitos_desde, efeitos_ate]` contém a data. Se a data é anterior a todas as versões, devolve a primeira, com `produz_efeitos_na_data: false` e, se ela for `alterado`, a `observacao` de redação anterior. Se a data é posterior ao fim da última versão (ex.: revogado), devolve a última, com `produz_efeitos_na_data: false`; o dispositivo **não** vira "não encontrado", porque existiu e vigorou (decisão de 2026-11-06). Se mais de uma versão é possível (término indeterminado), devolve a mais antiga com `produz_efeitos_na_data: null`. As demais versões aparecem sempre em `outras_versoes[]`, para o modelo ver que o texto muda com o tempo.
 
 - `produz_efeitos_na_data`: `true`, `false` ou `null` (indeterminado). Nunca `false` no lugar de "não sei".
 - `observacao` para `alterado` com `data_referencia < efeitos_desde`: "redação anterior não incluída no corpus".
+- `observacao` quando a versão devolvida tem `fundamento_ate` e a data é posterior a `efeitos_ate`: "revogado a partir de <efeitos_ate + 1 dia> (<fundamento_ate>)".
 - **Limiar de pontuação** calibrado com casos de teste: consulta fora do tema → `encontrado: false`.
 - **"Não encontrei" é sucesso.** `isError` só para entrada inválida (códigos `entrada_invalida`) e para o bloqueio de CPF/CNPJ (código `dados_de_contribuinte`).
 - **Limites de tamanho:** `trecho` com até 300 caracteres; até 10 resultados; `obter_dispositivo` com teto de caracteres (valor definido no passo 09) e `truncado: true` quando cortar.
