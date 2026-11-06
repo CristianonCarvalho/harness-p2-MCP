@@ -50,7 +50,7 @@ Verificados nesta data, com as fontes indicadas. Cada passo que depende deles co
 - **Hooks do Claude Code:** em `PreToolUse`, sair com **código 2** bloqueia a chamada e o stderr volta ao modelo como motivo; JSON na saída só é lido com código 0. O matcher é comparado com o nome da ferramenta (sensível a maiúsculas); ferramentas MCP aparecem como `mcp__<server>__<ferramenta>`. Confirmar a forma exata com `/hooks` no passo 11.
 - **Skills do Claude Code:** pasta com `SKILL.md` (frontmatter YAML + markdown); a `description` decide quando a skill é carregada. Local do projeto: `.claude/skills/<nome>/SKILL.md`. Conferir os campos em `code.claude.com/docs/en/skills` no passo 12.
 - **CNPJ alfanumérico (IN RFB 2.229/2024, a partir de julho de 2026):** 14 posições; as 12 primeiras podem ter letras A–Z; os 2 DVs continuam numéricos; o DV usa o mesmo módulo 11, com o valor de cada caractere igual ao código ASCII menos 48 (dígitos mantêm o valor atual). Conferir no manual de cálculo do DV da RFB no passo 02. *(Conferido no passo 02 no "Perguntas & Respostas: CNPJ alfanumérico" da RFB, pergunta 14.)*
-- **HTML da EC 132 no Planalto (conferido em 2026-11-06 no arquivo coletado no passo 03):** página gerada pelo FrontPage, em `windows-1252` e com quebras de linha CRLF; 623 parágrafos `<p class="dou-paragraph">`; artigos da EC com âncora `<a name="art1">` a `art23`; nenhum texto tachado. Dos 58 blocos citados, 39 fecham com `" (NR)` (dispositivos que já existiam, como art. 149-A da CF e art. 76-A do ADCT) e 19 fecham só com a aspa (dispositivos novos: arts. 149-B, 149-C, Seção V-A com o art. 156-A, art. 159-A, ADCT 124 a 137). **"(AC)" não aparece.** O art. 156-A, § 1º, é citado nos arts. 1º, 3º e 4º da EC (três redações). O Planalto derruba clientes automatizados; a coleta é feita pelo navegador.
+- **HTML da EC 132 no Planalto (conferido em 2026-11-06 no arquivo coletado no passo 03):** página gerada pelo FrontPage, em `windows-1252` e com quebras de linha CRLF; 623 parágrafos `<p class="dou-paragraph">`; artigos da EC com âncora `<a name="art1">` a `art23`; nenhum texto tachado. Dos 58 blocos citados, 39 fecham com `" (NR)` (dispositivos que já existiam, como art. 149-A da CF e art. 76-A do ADCT) e 19 fecham só com a aspa (dispositivos novos: arts. 149-B, 149-C, Seção V-A com o art. 156-A, art. 159-A, ADCT 124 a 137). **"(AC)" não aparece.** Nove dispositivos têm mais de uma redação na própria EC (ex.: art. 156-A, § 1º, IX, e art. 195, § 17, citados nos arts. 1º, 3º e 4º; art. 104, IV, do ADCT, nos arts. 2º e 5º). Nos artigos posteriores, o caminho até eles aparece só como contexto, em linhas de pontos (`§ 1º .....`). O Planalto derruba clientes automatizados; a coleta é feita pelo navegador.
 
 ## 4. Arquitetura
 
@@ -123,7 +123,7 @@ fetch (rede) → structure (puro) → effects (puro) → build (puro + correçõ
 }
 ```
 
-- **Chave = (`id`, `versao`).** O mesmo `id` pode aparecer em vários registros, um por artigo da EC que o inclui ou altera. Exemplo real: `CF, art. 156-A, § 1º` é incluído pelo art. 1º (efeitos desde a publicação), alterado pelo art. 3º (a partir de 2027) e de novo pelo art. 4º (a partir de 2033). `pai` aponta para o `id` do pai, e a versão do pai é a do mesmo artigo da EC.
+- **Chave = (`id`, `versao`).** O mesmo `id` pode aparecer em vários registros, um por artigo da EC que o inclui ou altera. Exemplo real: `CF, art. 156-A, § 1º, IX` é incluído pelo art. 1º (efeitos desde a publicação), alterado pelo art. 3º (a partir de 2027) e de novo pelo art. 4º (a partir de 2033). `pai` aponta para o `id` do pai, e a versão do pai é a do mesmo artigo da EC.
 - `metodo`: `automatico` | `correcao` | `indeterminado`. Com `indeterminado`, `efeitos_desde` é `null`.
 - `efeitos_ate`: `null` significa "sem término conhecido".
 
@@ -209,7 +209,7 @@ Todos offline, independentes do diretório, sem `conftest.py`. `uv run pytest`.
 | `ingest.structure` | HTML sintético escrito à mão no formato do Planalto → registros, ids, `pai`, `alteracao` (`(NR)` → alterado, sem marca → incluído), linhas de pontos ignoradas, mesmo dispositivo em dois artigos da EC → duas versões |
 | `ingest.effects` | art. de vigência sintético → datas e fundamentos; remissão não reconhecida → `indeterminado` |
 | `ingest.build` | correção vence o automático; correção sem fundamento → erro; build determinístico |
-| corpus real | todo registro tem data com fundamento ou `indeterminado`; ids únicos; `pai` existe; 5 a 10 casos conferidos à mão pelo usuário |
+| corpus real | todo registro tem data com fundamento ou `indeterminado`; pares (`id`, `versao`) únicos; `pai` existe ou é ancestral omitido (citado só como linha de pontos); 5 a 10 casos conferidos à mão pelo usuário |
 | `search` | consultas com resultado esperado no topo; fora do tema → `encontrado: false`; determinismo |
 | `tools` | contrato completo, `data_referencia` ecoada, escolha da versão pela data (antes, entre e depois das versões; término indeterminado → `null`), `outras_versoes`, três estados de efeito, truncamento, códigos de erro |
 | `server` | sobe via stdio com o `Client` do SDK; lista as duas ferramentas; `tools/call` igual a `tools.py` |
