@@ -1,0 +1,3 @@
+# Fonte bruta do corpus: bytes exatos do servidor (windows-1252, CRLF).
+# Sem conversão de fim de linha nem diff textual, para o sha256 do meta continuar valendo.
+corpus/raw/*.html -text -diff
