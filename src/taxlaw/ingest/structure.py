@@ -11,6 +11,14 @@ Formato do Planalto (conferido no arquivo real, spec seção 3):
 Um mesmo dispositivo citado em dois artigos da EC gera dois registros, um por
 `versao` (spec seção 5). O que o parser não reconhece vai para `warnings`:
 nunca é descartado em silêncio nem colado no dispositivo anterior.
+
+`errors` é para o que torna o resultado errado, não só incompleto: uma âncora
+<a name="artN"> cujo caput não foi reconhecido faria os filhos do art. N serem
+registrados no artigo anterior, sem nenhum aviso (achado do passo 05). O build
+aborta se houver erro.
+
+O texto normativo termina em "Brasília, em <data>": o que vem depois
+(assinaturas, aviso do DOU) não é norma e é ignorado sem aviso.
 """
 
 from __future__ import annotations
@@ -40,6 +48,7 @@ class Record:
 class ParseResult:
     records: list[Record] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 
 def decode_html(raw: bytes) -> str:
@@ -102,7 +111,9 @@ def paragraphs(html: str) -> list[tuple[str | None, str]]:
 
 # ------------------------------------------------------------------ rótulos
 
-_ART = re.compile(r"^Art\. (\d+)(?:º|o)?(-[A-Z])?\.?(?=\s|$)")
+# O ponto depois do número pode vir colado no texto: o FrontPage gerou
+# "Art. 12.Fica instituído..." (arts. 12 e 17 da EC no arquivo real).
+_ART = re.compile(r"^Art\. (\d+)(?:º|o)?(-[A-Z])?(?:\.|(?=\s|$))")
 _PAR = re.compile(r"^§ (\d+)(?:º|o)?(?=\s|\.|$)")
 _PAR_UNICO = re.compile(r"^Parágrafo único\.?", re.IGNORECASE)
 _INC = re.compile(r"^([IVXLCDM]+) ?[-–—](?=\s|\.|$)")
@@ -112,6 +123,7 @@ _HEADING = re.compile(r"^(TÍTULO|CAPÍTULO|Seção|Subseção)\b", re.IGNORECAS
 _DOTS = re.compile(r"^[.…\s]*$")
 _BLOCK_END = re.compile(r'"\s*(\(NR\))?\s*$')
 _VIGENCIA = re.compile(r"\s*Vigência\s*$")
+_END_OF_TEXT = re.compile(r"^Brasília, (em )?\d")
 
 
 def _ordinal(n: int) -> str:
@@ -248,7 +260,18 @@ def parse(html: str) -> ParseResult:
             continue
 
         text = _VIGENCIA.sub("", text)
+        if ec_article is not None and _END_OF_TEXT.match(text):
+            break  # fim do texto normativo: assinaturas e aviso do DOU não são norma
         m = _ART.match(text)
+        if anchor is not None:
+            # A âncora prova que ali começa o art. N da EC. Se o caput não bate,
+            # seguir em frente registraria os filhos dele no artigo anterior.
+            if m is None:
+                result.errors.append(f"âncora {anchor} sem caput de artigo reconhecido: {text[:60]}")
+                continue
+            if int(m.group(1)) != int(anchor[3:]):
+                result.errors.append(f"âncora {anchor} com caput do art. {m.group(1)}: {text[:60]}")
+                continue
         if anchor is not None and m:
             ec_article = int(m.group(1))
             if "Ato das Disposições Constitucionais Transitórias" in text:

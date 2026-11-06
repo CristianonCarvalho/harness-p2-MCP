@@ -52,6 +52,7 @@ FIXTURE = (
     + p('§ 1º Parágrafo sintético do artigo dez.')
     + p('<a name="art23"></a>Art. 23. Esta Emenda entra em vigor na data de sua publicação (texto sintético).')
     + '<p align="center">Brasília, em 20 de dezembro de 2023</p>\n'
+    '<p align="center">Assinatura sintética depois do fim do texto</p>\n'
     '</body></html>\n'
 )
 
@@ -136,9 +137,13 @@ def test_omitted_lines_and_headings_are_not_records(result):
     assert not any(r.id == "CF.art43" for r in result.records)
 
 
-def test_preamble_is_ignored_and_signature_is_reported(result):
+def test_preamble_is_ignored_and_text_ends_at_brasilia(result):
+    # Passo 05: "Brasília, em <data>" encerra o texto normativo; o que vem
+    # depois (assinaturas, aviso do DOU) não é norma e não gera aviso.
     assert not any("preâmbulo" in r.texto for r in result.records)
-    assert result.warnings == ["parágrafo fora de bloco sem rótulo: Brasília, em 20 de dezembro de 2023"]
+    assert not any("Brasília" in r.texto or "Assinatura" in r.texto for r in result.records)
+    assert result.warnings == []
+    assert result.errors == []
 
 
 def test_parse_is_deterministic(result):
@@ -186,3 +191,45 @@ def test_decode_html_follows_declared_charset_and_defaults_to_windows_1252():
 def test_paragraphs_capture_anchor_and_clean_text():
     got = paragraphs(p('<a name="art7"></a>Art. 7º Texto&nbsp;com &quot;aspas&quot; e <strong>negrito</strong>.'))
     assert got == [("art7", 'Art. 7º Texto com "aspas" e negrito.')]
+
+
+# ---- passo 05: casos achados no arquivo real, reproduzidos com texto sintético
+
+
+def test_article_number_glued_to_text_is_recognized():
+    # No arquivo real: "Art. 12.Fica instituído..." (sem espaço depois do ponto).
+    html = p('<a name="art12"></a>Art. 12.Texto sintético colado ao número:') + p("§ 1º Parágrafo sintético.")
+    result = parse(html)
+    assert [(r.id, r.versao) for r in result.records] == [
+        ("EC132.art12", "EC132.art12"),
+        ("EC132.art12.par1", "EC132.art12"),
+    ]
+    assert result.errors == [] and result.warnings == []
+
+
+def test_anchor_without_recognized_caput_is_an_error():
+    html = (
+        p('<a name="art11"></a>Art. 11. Caput sintético.')
+        + p('<a name="art12"></a>Artigo doze sem rótulo reconhecível')
+        + p("§ 1º Parágrafo sintético.")
+    )
+    result = parse(html)
+    assert result.errors == ["âncora art12 sem caput de artigo reconhecido: Artigo doze sem rótulo reconhecível"]
+
+
+def test_anchor_number_must_match_caput_number():
+    result = parse(p('<a name="art5"></a>Art. 6º Caput sintético.'))
+    assert result.errors == ["âncora art5 com caput do art. 6: Art. 6º Caput sintético."]
+    assert result.records == []
+
+
+def test_text_after_brasilia_is_not_parsed():
+    html = (
+        p('<a name="art1"></a>Art. 1º Caput sintético.')
+        + p("Brasília, em 1º de janeiro de 2000")
+        + p("Assinatura sintética")
+        + p("§ 1º Parece dispositivo, mas vem depois do fim do texto.")
+    )
+    result = parse(html)
+    assert [r.id for r in result.records] == ["EC132.art1"]
+    assert result.warnings == [] and result.errors == []
