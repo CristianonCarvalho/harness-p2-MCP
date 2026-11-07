@@ -124,6 +124,8 @@ fetch (rede) → structure (puro) → effects (puro) → build (puro + correçõ
 }
 ```
 
+**Formato do arquivo (decisão de 2026-11-07, aplicada no início do passo 08):** `fonte_url` e `coletado_em` saem de cada registro e vão para um cabeçalho único: `dispositivos.json` passa a ser `{"fonte": {"url": ..., "coletado_em": ..., "sha256_html": ...}, "dispositivos": [...]}`. Motivo: com os dois campos em cada um dos 487 registros, uma recoleta que muda uma vírgula muda também 487 linhas de `coletado_em`, e o diff esconde a mudança real. As ferramentas continuam expondo `fonte_url` (por dispositivo, lido do cabeçalho) e `corpus{versao, coletado_em}`.
+
 - **Chave = (`id`, `versao`).** O mesmo `id` pode aparecer em vários registros, um por artigo da EC que o inclui ou altera. Exemplo real: `CF, art. 156-A, § 1º, IX` é incluído pelo art. 1º (efeitos desde a publicação), alterado pelo art. 3º (a partir de 2027) e de novo pelo art. 4º (a partir de 2033). `pai` aponta para o `id` do pai, e a versão do pai é a do mesmo artigo da EC.
 - `metodo`: `automatico` | `correcao` | `indeterminado`. Com `indeterminado`, `efeitos_desde` é `null`.
 - `efeitos_ate`: `null` significa "sem término conhecido". `fundamento_ate`: a revogação que encerra a versão (ex.: `EC 132/2023, art. 22, II, a`), ou `null` quando o término vem da versão seguinte ou não existe.
@@ -231,7 +233,7 @@ Sem testes que chamem LLM: a avaliação do comportamento do modelo é o P3. Ver
 | | 05 | `structure` no HTML real |
 | | 06 | `effects` |
 | | 07 | `build`, correções, `dispositivos.json`, casos conferidos à mão. *Diagramas: pipeline e modelo de dados* |
-| 3 Server | 08 | `search` (BM25 + limiar) |
+| 3 Server | 08 | ajuste do formato de `dispositivos.json` (cabeçalho `fonte`, ver seção 5) no build e nos testes do passo 07; depois `search` (BM25 + limiar) |
 | | 09 | `tools.py` |
 | | 10 | `server.py` + `.mcp.json`; primeira consulta real. *Diagrama: sequência de consulta* |
 | 4 Harness | 11 | hook `PreToolUse` (critério 2) |
