@@ -1,0 +1,16 @@
+# Correções manuais das datas de efeito (spec, seção 5).
+#
+# Uma correção vence o cálculo automático do effects para um par (id, versao).
+# Toda correção exige `fundamento`: o dispositivo ou a fonte que justifica a data.
+# Datas em AAAA-MM-DD; `null` = sem data (efeitos_ate null = sem término conhecido).
+#
+# Exemplo (comentado):
+# correcoes:
+#   - id: CF.art156-A.par1.incIX
+#     versao: EC132.art3
+#     efeitos_desde: 2027-01-01
+#     efeitos_ate: 2032-12-31
+#     fundamento: "EC 132/2023, art. 23, I, e art. 4º"
+#
+# Em 2026-11-07 o automático não deixou nenhum indeterminado: lista vazia.
+correcoes: []
