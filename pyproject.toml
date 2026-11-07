@@ -12,7 +12,9 @@ version = "0.1.0"
 description = "MCP server de legislação pública da reforma tributária (EC 132/2023)"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "pyyaml>=6,<7",
+]
 
 [dependency-groups]
 dev = ["pytest"]
