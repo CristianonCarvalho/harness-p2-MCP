@@ -36,8 +36,19 @@ CHECKED_BY_USER = {
 
 
 @pytest.fixture(scope="module")
-def rows():
-    return {(r["id"], r["versao"]): r for r in json.loads(DISPOSITIVOS.read_text(encoding="utf-8"))}
+def document():
+    return json.loads(DISPOSITIVOS.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(scope="module")
+def rows(document):
+    return {(r["id"], r["versao"]): r for r in document["dispositivos"]}
+
+
+def test_header_fonte_matches_the_meta(document):
+    meta = json.loads((ROOT / "corpus" / "raw" / "ec132-2023.meta.json").read_text(encoding="utf-8"))
+    assert document["fonte"] == {"url": meta["url"], "coletado_em": meta["coletado_em"], "sha256_html": meta["sha256"]}
+    assert document["fonte"]["url"].startswith("https://www.planalto.gov.br/")
 
 
 def test_default_paths_point_to_the_repo_corpus():
@@ -63,7 +74,7 @@ def test_corpus_invariants(rows):
     assert len(rows) == 487
     for (rid, versao), row in rows.items():
         assert row["metodo"] in {"automatico", "correcao", "indeterminado"}, rid
-        assert row["fonte_url"].startswith("https://www.planalto.gov.br/"), rid
+        assert "fonte_url" not in row and "coletado_em" not in row, rid
         if row["metodo"] == "indeterminado":
             assert row["efeitos_desde"] is None, rid
         if row["efeitos_ate"] is not None:
