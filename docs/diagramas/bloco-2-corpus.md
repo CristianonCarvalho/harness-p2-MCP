@@ -118,4 +118,4 @@ Leitura do modelo:
 - **`alteracao`:** `incluido` (bloco fechado só com aspas), `alterado` (bloco fechado com "(NR)") ou `original` (texto da própria EC).
 - **`metodo`:** `automatico`, `correcao` ou `indeterminado`. Com `indeterminado`, as datas ficam nulas: nunca são inventadas.
 - **Datas que podem ser nulas:** `efeitos_ate` nulo quer dizer "sem término conhecido". `fundamento_ate` só existe quando o término vem de uma revogação do art. 22.
-- **Formato do arquivo:** hoje, cada registro também leva `fonte_url` e `coletado_em`. No início do passo 08 eles vão para um cabeçalho `fonte` único (spec, seção 5).
+- **Formato do arquivo:** até o passo 07, cada registro também levava `fonte_url` e `coletado_em`. Desde o passo 08, eles ficam uma vez só no cabeçalho `fonte` (`url`, `coletado_em`, `sha256_html`), e os registros vão em `dispositivos` (spec, seção 5).
