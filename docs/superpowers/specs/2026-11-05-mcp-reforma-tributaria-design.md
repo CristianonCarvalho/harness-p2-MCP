@@ -148,13 +148,15 @@ Ambas devolvem JSON estruturado (`structuredContent` com `outputSchema` e o mesm
 | `data_referencia` | data ISO | opcional; ausente → data de hoje, ecoada na resposta |
 | `limite` | inteiro | padrão 5, de 1 a 10 |
 
-Saída: `encontrado`, `consulta`, `data_referencia`, `resultados[]` (cada um com `id`, `versao`, `citacao`, `trecho` de até 300 caracteres, `pontuacao`, `efeitos{desde, ate, fundamento, metodo, produz_efeitos_na_data}` e `outras_versoes[]` com `versao` e `efeitos{desde, ate}`) e `corpus{versao, coletado_em}`. A busca agrupa as versões de um mesmo `id` num só resultado, e mostra a versão escolhida pela regra de versão abaixo. Sem resultado acima do limiar: `encontrado: false`, `resultados: []`, `motivo`.
+Saída: `encontrado`, `consulta`, `data_referencia`, `resultados[]` (cada um com `id`, `versao`, `citacao`, `trecho` de até 300 caracteres, `pontuacao`, `efeitos{desde, ate, fundamento, fundamento_ate, metodo, produz_efeitos_na_data}` e `outras_versoes[]` com `versao` e `efeitos{desde, ate}`), `motivo` (`null` quando encontrou) e `corpus{versao, coletado_em}`. `pontuacao` é a relevância da busca (de 0 a 1), não o BM25 bruto. A busca agrupa as versões de um mesmo `id` num só resultado, e mostra a versão escolhida pela regra de versão abaixo. Sem resultado acima do limiar: `encontrado: false`, `resultados: []`, `motivo`.
 
 ### `obter_dispositivo`
 
 Entrada: `id` (obrigatório), `data_referencia` (opcional, mesma regra), `incluir_filhos` (padrão `true`).
 
-Saída: `encontrado`, `id`, `versao`, `citacao`, `norma`, `origem`, `alteracao`, `texto`, `filhos[]`, `vigor_desde`, `efeitos{...}`, `outras_versoes[]`, `observacao`, `truncado`, `fonte_url`, `corpus{...}`. Id inexistente: `encontrado: false`. Os `filhos` são os da mesma `versao`.
+Saída: `encontrado`, `id`, `data_referencia`, `versao`, `citacao`, `norma`, `origem`, `alteracao`, `texto`, `filhos[]`, `vigor_desde`, `efeitos{...}`, `outras_versoes[]`, `observacao`, `truncado`, `fonte_url`, `corpus{...}`. Id inexistente: `encontrado: false`, com `id`, `data_referencia`, `motivo` e `corpus`.
+
+**Filhos (decisão de 2026-11-07):** são os filhos diretos. A **lista** vem da versão escolhida do pai; o **texto** de cada filho é escolhido pela mesma regra de data, e cada filho traz `id`, `versao`, `citacao`, `texto` e `produz_efeitos_na_data`. Motivo: `CF, art. 156-A, § 1º` tem uma versão só (os arts. 3º e 4º reescrevem só o inciso IX e omitem o resto com linha de pontos); com "filhos da mesma versão", em 2030 o inciso IX apareceria na redação do art. 1º, que só produz efeitos até 2026-12-31. Ordem dos filhos: a da lei (incisos e alíneas, depois parágrafos; I, II, …, IX, X), não a alfabética dos ids.
 
 ### Regras
 
@@ -165,7 +167,8 @@ Saída: `encontrado`, `id`, `versao`, `citacao`, `norma`, `origem`, `alteracao`,
 - `observacao` quando a versão devolvida tem `fundamento_ate` e a data é posterior a `efeitos_ate`: "revogado a partir de <efeitos_ate + 1 dia> (<fundamento_ate>)".
 - **Limiar de pontuação** calibrado com casos de teste: consulta fora do tema → `encontrado: false`.
 - **"Não encontrei" é sucesso.** `isError` só para entrada inválida (códigos `entrada_invalida`) e para o bloqueio de CPF/CNPJ (código `dados_de_contribuinte`).
-- **Limites de tamanho:** `trecho` com até 300 caracteres; até 10 resultados; `obter_dispositivo` com teto de caracteres (valor definido no passo 09) e `truncado: true` quando cortar.
+- **Limites de tamanho:** `trecho` com até 300 caracteres; até 10 resultados; `obter_dispositivo` com teto de 4.000 caracteres para texto + textos dos filhos (decisão de 2026-11-07; o maior caso real, EC, art. 9º, tem 3.013). Ao cortar: `truncado: true`, o texto termina em "…" e os filhos que não cabem continuam na lista com `texto: null`, para o modelo pedi-los um a um.
+- **Ordem das checagens:** guarda de CPF/CNPJ em todo argumento de texto, depois validação, depois busca. Em `tools.py` os erros são a exceção `ToolError(code, message)`; o server (passo 10) a converte em `isError`.
 - `corpus.versao` = sha256 de `dispositivos.json`, em toda resposta.
 
 ## 7. Guardas de CPF/CNPJ
