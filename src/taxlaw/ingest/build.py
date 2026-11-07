@@ -12,7 +12,10 @@ Regras (spec, seção 5):
 - correções de `efeitos_correcoes.yaml` vencem o automático e exigem
   `fundamento`;
 - saída determinística: mesma entrada, mesmos bytes (o teste confere que o
-  `dispositivos.json` versionado é exatamente o que o build gera hoje).
+  `dispositivos.json` versionado é exatamente o que o build gera hoje);
+- `fonte_url` e `coletado_em` ficam uma vez só, no cabeçalho `fonte` (spec,
+  seção 5, decisão de 2026-11-07): repetidos em cada registro, uma recoleta
+  que muda uma vírgula mudaria 487 linhas e esconderia a mudança no diff.
 """
 
 from __future__ import annotations
@@ -149,7 +152,7 @@ def _iso(value: date | None) -> str | None:
 
 
 def render(records: list[Record], effects: dict[tuple[str, str], Effects], meta: dict) -> str:
-    """JSON determinístico: ordem por (id, número do artigo da EC), campos na ordem da spec."""
+    """JSON determinístico: cabeçalho `fonte` + registros ordenados por (id, artigo da EC)."""
     ordered = sorted(records, key=lambda r: (r.id, int(r.versao.removeprefix("EC132.art"))))
     rows = []
     for r in ordered:
@@ -169,10 +172,12 @@ def render(records: list[Record], effects: dict[tuple[str, str], Effects], meta:
             "fundamento_efeitos": e.fundamento,
             "fundamento_ate": e.fundamento_ate,
             "metodo": e.metodo,
-            "fonte_url": meta["url"],
-            "coletado_em": meta["coletado_em"],
         })
-    return json.dumps(rows, ensure_ascii=False, indent=2) + "\n"
+    document = {
+        "fonte": {"url": meta["url"], "coletado_em": meta["coletado_em"], "sha256_html": meta["sha256"]},
+        "dispositivos": rows,
+    }
+    return json.dumps(document, ensure_ascii=False, indent=2) + "\n"
 
 
 def build(raw_dir: Path, corrections_text: str) -> BuildResult:

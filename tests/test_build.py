@@ -121,28 +121,29 @@ def test_minimum_structure():
 
 # -------------------------------------------------------------------- render
 
-META = {"url": "https://exemplo.invalid/ec", "coletado_em": "2026-11-06"}
+META = {"url": "https://exemplo.invalid/ec", "coletado_em": "2026-11-06", "sha256": "ab" * 32}
 
 
 def test_render_orders_by_id_then_ec_article_and_uses_spec_fields():
     records = [rec("CF.art10", 10), rec("CF.art10", 3), rec("ADCT.art1", 2)]
     effects = {(r.id, r.versao): AUTO for r in records}
-    rows = json.loads(render(records, effects, META))
+    document = json.loads(render(records, effects, META))
+    assert document["fonte"] == {"url": "https://exemplo.invalid/ec", "coletado_em": "2026-11-06", "sha256_html": "ab" * 32}
+    rows = document["dispositivos"]
     # art. 3 antes do art. 10: ordem numérica, não alfabética ("art10" < "art3" como texto)
     assert [(r["id"], r["versao"]) for r in rows] == [("ADCT.art1", "EC132.art2"), ("CF.art10", "EC132.art3"), ("CF.art10", "EC132.art10")]
     assert list(rows[0]) == [
         "id", "citacao", "norma", "pai", "versao", "origem", "alteracao", "texto", "vigor_desde", "efeitos_desde",
-        "efeitos_ate", "fundamento_efeitos", "fundamento_ate", "metodo", "fonte_url", "coletado_em",
+        "efeitos_ate", "fundamento_efeitos", "fundamento_ate", "metodo",
     ]
     assert rows[0]["efeitos_desde"] == "2023-12-21" and rows[0]["efeitos_ate"] is None
-    assert rows[0]["coletado_em"] == "2026-11-06"
 
 
 def test_render_is_byte_stable_and_keeps_accents():
     records = [rec("CF.art10")]
     text = render(records, {(r.id, r.versao): AUTO for r in records}, META)
     assert text == render(records, {(r.id, r.versao): AUTO for r in records}, META)
-    assert "citação" in text and text.endswith("]\n")
+    assert "citação" in text and text.endswith("}\n")
 
 
 # ----------------------------------------------------------------------- CLI
@@ -159,7 +160,9 @@ def test_cli_writes_report_and_file(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "dispositivos: 487 versões, 474 ids" in out
     assert "indeterminados: 0" in out and "avisos: 0" in out
-    assert len(json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))) == 487
+    document = json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))
+    assert len(document["dispositivos"]) == 487
+    assert document["fonte"]["coletado_em"] == "2026-11-06"
 
 
 def test_cli_is_deterministic_and_check_mode(tmp_path, capsys):
@@ -197,5 +200,6 @@ def test_cli_applies_a_real_correction(tmp_path, capsys):
     )
     assert run(tmp_path, corrections=fix) == 0
     assert "correções aplicadas: 1" in capsys.readouterr().out
-    row = next(r for r in json.loads((tmp_path / "out.json").read_text(encoding="utf-8")) if r["id"] == "ADCT.art125")
+    rows = json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))["dispositivos"]
+    row = next(r for r in rows if r["id"] == "ADCT.art125")
     assert (row["efeitos_desde"], row["metodo"], row["fundamento_efeitos"]) == ("2026-01-01", "correcao", "teste sintético de correção")
