@@ -13,6 +13,7 @@ description = "MCP server de legislação pública da reforma tributária (EC 13
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "mcp>=2,<3",
     "pyyaml>=6,<7",
 ]
 
