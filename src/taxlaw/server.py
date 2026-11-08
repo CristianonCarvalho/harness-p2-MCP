@@ -35,7 +35,7 @@ from mcp.server.mcpserver.exceptions import ToolError as SDKToolError
 from mcp.types import ToolAnnotations
 
 from taxlaw import tools
-from taxlaw.guard import describe_findings, find_taxpayer_ids
+from taxlaw.guard import find_in_arguments
 
 SERVER_NAME = "taxlaw"  # o Claude Code mostra as ferramentas como mcp__taxlaw__<nome>
 
@@ -130,32 +130,14 @@ class TaxLawError(SDKToolError):
         super().__init__(json.dumps({"erro": code, "mensagem": message}, ensure_ascii=False))
 
 
-def _scan(value: Any, path: str) -> str | None:
-    """Caminho do primeiro texto com CPF/CNPJ válido (chaves também), ou None."""
-    if isinstance(value, str):
-        findings = find_taxpayer_ids(value)
-        return f"{describe_findings(findings)} no campo '{path}'" if findings else None
-    if isinstance(value, dict):
-        for key, item in value.items():
-            found = _scan(str(key), f"{path}.<chave>") or _scan(item, f"{path}.{key}")
-            if found:
-                return found
-    if isinstance(value, list | tuple):
-        for i, item in enumerate(value):
-            found = _scan(item, f"{path}[{i}]")
-            if found:
-                return found
-    return None
-
-
 class TaxLawServer(MCPServer):
     """MCPServer com a guarda de CPF/CNPJ antes da validação do SDK."""
 
     async def call_tool(self, name, arguments, context=None):  # type: ignore[override]
-        for key, value in (arguments or {}).items():
-            found = _scan(str(key), "<chave>") or _scan(value, key)
-            if found:
-                raise TaxLawError("dados_de_contribuinte", found)
+        # A mesma varredura do hook do Claude Code (guard.find_in_arguments).
+        found = find_in_arguments(arguments or {})
+        if found:
+            raise TaxLawError("dados_de_contribuinte", found)
         try:
             return await super().call_tool(name, arguments, context)
         except SDKToolError as exc:
