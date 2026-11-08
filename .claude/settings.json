@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(mcp__taxlaw__.*|WebSearch|WebFetch)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --quiet --project \"$CLAUDE_PROJECT_DIR\" python \"$CLAUDE_PROJECT_DIR/hooks/block_taxpayer_ids.py\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
