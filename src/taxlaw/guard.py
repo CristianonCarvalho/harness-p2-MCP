@@ -1,8 +1,9 @@
 """Guarda de CPF/CNPJ: acha números de contribuinte num texto sem nunca repeti-los.
 
 É o ponto único usado pelo hook do Claude Code (passo 11) e pelo server
-(passo 10). Um "achado" exige formato E dígitos verificadores corretos: só a
-regex confundiria números de processo, datas e artigos com documentos.
+(passo 10): `find_in_arguments` varre os argumentos de uma chamada para os
+dois. Um "achado" exige formato E dígitos verificadores corretos: só a regex
+confundiria números de processo, datas e artigos com documentos.
 """
 
 from __future__ import annotations
@@ -59,12 +60,17 @@ class Finding:
     end: int
 
 
-# Fronteiras: o candidato não pode estar colado a letra/dígito, nem a um
-# separador seguido de letra/dígito. Assim "1.234.567.890-12" não vira o CPF
-# "234.567.890-12", mas "CPF 000.000.000-00." (ponto final) ainda é candidato.
+# Fronteiras: o candidato não pode estar colado a letra/dígito, nem a "." ou
+# "-" com um DÍGITO do outro lado (o número continuaria). Assim
+# "1.234.567.890-12" não vira o CPF "234.567.890-12", mas "CPF 000.000.000-00."
+# (ponto final) ainda é candidato.
+# Passo 11: a "/" não conta como continuação (numa URL ou data ela separa
+# campos; a barra do próprio CNPJ fica dentro do match), e letra do outro lado
+# de "." ou "-" também não. Antes, "https://exemplo.invalid/<cnpj>" e
+# "cpf-<número>" passavam, e o WebFetch recebe exatamente URLs.
 # [0-9] e não \d: em Python, \d também casa dígitos de outros alfabetos.
-_BEFORE = r"(?<![0-9A-Za-z])(?<![0-9A-Za-z][./-])"
-_AFTER = r"(?![0-9A-Za-z])(?![./-][0-9A-Za-z])"
+_BEFORE = r"(?<![0-9A-Za-z])(?<![0-9][.-])"
+_AFTER = r"(?![0-9A-Za-z])(?![.-][0-9])"
 # Cada separador é opcional sozinho: a RFB mostra máscaras parciais como
 # "AA345678/0003-29" (Perguntas & Respostas, pergunta 23).
 _CPF_RE = re.compile(_BEFORE + r"[0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2}" + _AFTER)
@@ -105,3 +111,36 @@ def describe_findings(findings: list[Finding]) -> str:
     parts = [f"{counts[k]} {k.upper()}" for k in ("cpf", "cnpj") if counts[k]]
     return "possível dado de contribuinte: " + " e ".join(parts) + " (números omitidos)"
 
+
+def _scan(value: object, path: str) -> str | None:
+    """Motivo para o primeiro texto com CPF/CNPJ válido sob `value` (chaves também), ou None."""
+    if isinstance(value, str):
+        findings = find_taxpayer_ids(value)
+        return f"{describe_findings(findings)} no campo '{path}'" if findings else None
+    if isinstance(value, dict):
+        for key, item in value.items():
+            found = _scan(str(key), f"{path}.<chave>") or _scan(item, f"{path}.{key}")
+            if found:
+                return found
+    if isinstance(value, list | tuple):
+        for i, item in enumerate(value):
+            found = _scan(item, f"{path}[{i}]")
+            if found:
+                return found
+    return None
+
+
+def find_in_arguments(arguments: dict) -> str | None:
+    """Varre os argumentos de uma chamada de ferramenta: todos os textos, em qualquer profundidade.
+
+    Usada pelo server (antes da validação do SDK) e pelo hook do Claude Code:
+    as duas guardas não divergem. Chaves também são varridas, porque um número
+    pode chegar como nome de campo. Devolve o motivo (tipo, quantidade e
+    caminho do campo, nunca o número) ou None. Caminhos: `consulta`,
+    `extra.lista[1]`, `<chave>` (nome de campo do topo), `extra.<chave>`.
+    """
+    for key, value in arguments.items():
+        found = _scan(str(key), "<chave>") or _scan(value, str(key))
+        if found:
+            return found
+    return None

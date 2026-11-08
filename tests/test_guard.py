@@ -120,3 +120,24 @@ def test_finding_is_immutable():
     finding = Finding(kind="cpf", start=0, end=11)
     with pytest.raises(AttributeError):
         finding.start = 1
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "https://exemplo.invalid/{}",
+        "https://exemplo.invalid/{}/detalhes",
+        "https://exemplo.invalid/2024/{}",
+        "/consulta/cpf-{}",
+        "doc.{}",
+    ],
+)
+def test_number_inside_url_or_slug_is_found(template):
+    # Passo 11: o WebFetch recebe URLs. A "/" separa campos, e letra do outro
+    # lado de "." ou "-" não continua o número.
+    assert [f.kind for f in find_taxpayer_ids(template.format(CPF))] == ["cpf"]
+    assert [f.kind for f in find_taxpayer_ids(template.format(CNPJ))] == ["cnpj"]
+
+
+def test_formatted_cnpj_between_slashes_is_found():
+    assert [f.kind for f in find_taxpayer_ids(f"pasta/{CNPJ_FMT}/arquivo")] == ["cnpj"]
