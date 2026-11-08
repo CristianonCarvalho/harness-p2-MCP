@@ -34,6 +34,14 @@ No Claude Code (o hook entra sozinho quando o `settings.json` muda; se não entr
   - Falhas do próprio `uv`: se o comando nem chegar ao Python, o código não é 2 e a chamada segue. O server continua bloqueando o que for para o `taxlaw`.
 - **Três camadas, uma função.** O hook, o `server.py` e o `tools.py` usam a mesma `guard.py`. Uma correção nela vale para os três.
 
+## Verificação manual (2026-11-08)
+
+Feita no Claude Code, com o hook carregado sem precisar reiniciar a sessão:
+
+- **Com CPF:** `mcp__taxlaw__buscar_dispositivos` com um CPF sintético na `consulta` (gerado na hora com `make_cpf`, e não gravado em arquivo) foi **bloqueada antes de sair**. O modelo recebeu: `PreToolUse:mcp__taxlaw__buscar_dispositivos hook error: [...] Chamada bloqueada pelo hook do projeto: possível dado de contribuinte: 1 CPF (números omitidos) no campo 'consulta'.` O número não aparece no motivo.
+- **Sem CPF:** a consulta "zona franca de manaus" passou normalmente e devolveu `ADCT, art. 126, III, a`.
+- **`WebSearch` com CPF** ficou de fora do teste manual. Um CPF sintético com DV válido pode pertencer a alguém real, e, se o hook falhasse, ele iria para um buscador externo. Esse caminho está coberto pelos testes de `check` e do script. No `taxlaw`, uma falha do hook ainda seria barrada pelo server, na máquina local.
+
 ## Pergunta de previsão
 
 Depois do bloqueio, o que o modelo faz? Ele tenta de novo com o número disfarçado (com espaços, por extenso), desiste, ou explica ao usuário? Qual dessas reações o hook consegue impedir, e qual depende da skill do passo 12?
