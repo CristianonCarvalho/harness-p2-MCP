@@ -44,6 +44,27 @@ O que o diagrama mostra:
 - **Três saídas possíveis para um problema:** `ABORT` (resultado errado, nada é gravado), `indeterminado` (dado incompleto, registrado como tal) e aviso no relatório. Nenhum problema some em silêncio.
 - **O fecho do ciclo:** `test_build_real` compara o arquivo versionado com o que o build gera hoje. Se alguém mudar parser, effects, correções ou HTML sem rodar o build, a suíte quebra.
 
+## Passo 13: a LC 214 como segunda fonte
+
+O pipeline acima continua sendo o da EC 132. Desde os passos 13a e 13b, o build lê também a LC 214, por um caminho próprio, e junta as duas fontes no mesmo arquivo.
+
+```mermaid
+flowchart TD
+    PL["Página da LC 214 no Planalto<br/>versão compilada (com a LC 227/2026)"] -->|"navegador: fetch(location.href)"| FL
+    FL["fetch --source lc214-2025<br/>confere o título da página"] --> RL[("corpus/raw/lc214-2025.html<br/>+ .meta.json (sha256)")]
+    RL --> LS["lc_structure (13a)<br/>descarta redação tachada<br/>só os 23 artigos do escopo"]
+    LS -->|"162 Record, versao LC214"| LE
+    LS -->|"tachado parcial, id repetido,<br/>artigo do escopo ausente"| AB["build abortado"]
+    LE["lc_effects (13b)<br/>art. 544: vigor na publicação,<br/>efeitos por inciso (VI: 2026-01-01)"] --> B
+    LE -->|"LC 227, ressalva, inciso<br/>não reconhecido"| IND["indeterminado"]
+    EC["caminho da EC 132<br/>(diagrama acima)"] --> B
+    B["build: duas fontes,<br/>correções, estrutura mínima"] --> J[("corpus/dispositivos.json<br/>fontes: ec132-2023, lc214-2025<br/>649 versões, 636 ids")]
+```
+
+- **As linhas da EC não se movem.** Os ids da LC começam com `LC214`, que vem depois de `EC132` na ordem do arquivo.
+- **A fonte de cada registro** sai do prefixo da `versao` (`EC132.*` ou `LC214`). É assim que `obter_dispositivo` devolve o `fonte_url` certo.
+- **`corpus.coletado_em`** é a coleta mais antiga entre as fontes.
+
 ## Modelo de dados
 
 ```mermaid
@@ -118,4 +139,5 @@ Leitura do modelo:
 - **`alteracao`:** `incluido` (bloco fechado só com aspas), `alterado` (bloco fechado com "(NR)") ou `original` (texto da própria EC).
 - **`metodo`:** `automatico`, `correcao` ou `indeterminado`. Com `indeterminado`, as datas ficam nulas: nunca são inventadas.
 - **Datas que podem ser nulas:** `efeitos_ate` nulo quer dizer "sem término conhecido". `fundamento_ate` só existe quando o término vem de uma revogação do art. 22.
-- **Formato do arquivo:** até o passo 07, cada registro também levava `fonte_url` e `coletado_em`. Desde o passo 08, eles ficam uma vez só no cabeçalho `fonte` (`url`, `coletado_em`, `sha256_html`), e os registros vão em `dispositivos` (spec, seção 5).
+- **Formato do arquivo:** até o passo 07, cada registro também levava `fonte_url` e `coletado_em`. Desde o passo 08, eles ficam uma vez só no cabeçalho (`url`, `coletado_em`, `sha256_html`), e os registros vão em `dispositivos` (spec, seção 5). Desde o passo 13b, o cabeçalho é `fontes`, uma entrada por norma.
+- **`alteracao` na LC 214:** `alterado` e `incluido` indicam redação dada ou inclusão pela LC 227/2026 (não pela EC), e `origem` diz isso por extenso.
