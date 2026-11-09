@@ -248,7 +248,7 @@ Sem testes que chamem LLM: a avaliação do comportamento do modelo é o P3. Ver
 | 4 Harness | 11 | hook `PreToolUse` (critério 2) |
 | | 12 | skill (critério 3); consulta com e sem a skill. *Diagrama: guardas* |
 | 5 Depois | 14 | Kiro (critério 1), antecipado em 2026-11-09: `.kiro/settings/mcp.json`, `.kiro/hooks/` com o mesmo script do passo 11 e `.kiro/skills/` como link para a skill do passo 12 |
-| | 13 | capítulos da LC 214 |
+| | 13 | capítulos da LC 214: detalhado em [2026-11-09-lc214-capitulos-design.md](2026-11-09-lc214-capitulos-design.md), dividido em 13a, 13b e 13c |
 | | 15 | README de decisões e limites + "o que deu errado" |
 
 ## 11. Ligação com P3 e P4
