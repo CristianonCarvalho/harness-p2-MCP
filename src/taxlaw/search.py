@@ -10,9 +10,11 @@ banco" dá 5,8). Por isso o corte usa a **relevância** = pontuação / teto da
 consulta, em que o teto soma idf × (K1 + 1) de cada termo da consulta, e
 termos que não existem no corpus entram com o idf máximo. Medido: fora do
 tema até 0,130; dentro do tema, com vocabulário do texto, a partir de 0,180.
-Limiar 0,15. Consultas com palavras que a EC não usa ("ICMS", "split
-payment") ficam abaixo: "não encontrei" é honesto, e reformular é papel da
-skill (passo 12).
+Limiar 0,15. Remedido no passo 13c (2026-11-09), com a LC 214 no corpus: fora
+do tema até 0,138; dentro do tema (EC e LC) a partir de 0,248. O limiar ficou
+(`test_threshold_still_separates_the_groups_with_margin` vigia a folga).
+Consultas com palavras que a EC não usa ("ICMS", "split payment") ficam
+abaixo: "não encontrei" é honesto, e reformular é papel da skill (passo 12).
 
 Tudo determinístico: mesma consulta, mesmo resultado, empates pelo id. O texto
 das normas é tratado só como dado a pontuar; nada nele é interpretado.
