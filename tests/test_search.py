@@ -25,14 +25,15 @@ ROWS = [
 @pytest.fixture
 def corpus(tmp_path):
     path = tmp_path / "dispositivos.json"
-    path.write_text(json.dumps({"fonte": {"url": "https://exemplo.invalid", "coletado_em": "2026-11-06", "sha256_html": "0" * 64},
-                                "dispositivos": ROWS}, ensure_ascii=False), encoding="utf-8")
+    fontes = {"ec132-2023": {"url": "https://exemplo.invalid", "coletado_em": "2026-11-06", "sha256_html": "0" * 64}}
+    path.write_text(json.dumps({"fontes": fontes, "dispositivos": ROWS}, ensure_ascii=False), encoding="utf-8")
     return load_corpus(path), path
 
 
 def test_load_corpus_header_versions_and_hash(corpus):
     c, path = corpus
-    assert c.fonte["coletado_em"] == "2026-11-06"
+    assert c.coletado_em == "2026-11-06"
+    assert c.source_of(c.versions("CF.art2")[0])["url"] == "https://exemplo.invalid"
     assert c.versao == hashlib.sha256(path.read_bytes()).hexdigest()
     assert c.ids() == ["CF.art1", "CF.art156-A", "CF.art2", "CF.art3"]
     assert [v["versao"] for v in c.versions("CF.art2")] == ["EC132.art1", "EC132.art3"]

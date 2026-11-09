@@ -87,7 +87,8 @@ def _reference_date(value: object, today: date | None) -> date:
 
 
 def _corpus_info(ctx: Context) -> dict:
-    return {"versao": ctx.corpus.versao, "coletado_em": ctx.corpus.fonte["coletado_em"]}
+    # coletado_em: a coleta mais antiga entre as fontes (EC 132 e LC 214, passo 13b).
+    return {"versao": ctx.corpus.versao, "coletado_em": ctx.corpus.coletado_em}
 
 
 # ------------------------------------------------------------------ saída
@@ -262,6 +263,6 @@ def obter_dispositivo(ctx: Context, id: object, data_referencia: object = None, 
         "outras_versoes": _other_versions(choice),
         "observacao": _observation(choice, when),
         "truncado": truncated,
-        "fonte_url": ctx.corpus.fonte["url"],
+        "fonte_url": ctx.corpus.source_of(v)["url"],  # a norma de onde veio este dispositivo
         "corpus": _corpus_info(ctx),
     }

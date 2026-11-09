@@ -1,4 +1,4 @@
-"""Build do corpus: structure + effects + correções → corpus/dispositivos.json.
+"""Build do corpus: fontes + efeitos + correções → corpus/dispositivos.json.
 
 Uso:
     uv run python -m taxlaw.ingest.build            # gera e imprime o relatório
@@ -13,9 +13,15 @@ Regras (spec, seção 5):
   `fundamento`;
 - saída determinística: mesma entrada, mesmos bytes (o teste confere que o
   `dispositivos.json` versionado é exatamente o que o build gera hoje);
-- `fonte_url` e `coletado_em` ficam uma vez só, no cabeçalho `fonte` (spec,
-  seção 5, decisão de 2026-11-07): repetidos em cada registro, uma recoleta
-  que muda uma vírgula mudaria 487 linhas e esconderia a mudança no diff.
+- `fonte_url` e `coletado_em` ficam uma vez só, no cabeçalho (spec, seção 5,
+  decisão de 2026-11-07): repetidos em cada registro, uma recoleta que muda
+  uma vírgula mudaria centenas de linhas e esconderia a mudança no diff.
+
+Duas fontes desde o passo 13b (spec do passo 13, seção 6):
+- `ec132-2023`: structure + effects (art. 23 e art. 22 da EC);
+- `lc214-2025`: lc_structure (só os artigos de `LC214_SCOPE`) + lc_effects
+  (art. 544). O cabeçalho vira `fontes`, chaveado pelo nome da fonte; cada
+  fonte confere o próprio sha256, e o erro de qualquer uma aborta o build.
 """
 
 from __future__ import annotations
@@ -31,7 +37,9 @@ from pathlib import Path
 import yaml
 
 from taxlaw.ingest.effects import Effects, effects_for, find_publication_date
-from taxlaw.ingest.fetch import DEFAULT_RAW_DIR, SOURCE_NAME, paths_for, verify
+from taxlaw.ingest.fetch import DEFAULT_RAW_DIR, paths_for, verify
+from taxlaw.ingest.lc_effects import lc_effects_for
+from taxlaw.ingest.lc_structure import LC214_SCOPE, lc_paragraphs, parse_lc
 from taxlaw.ingest.structure import Record, decode_html, paragraphs, parse
 
 CORPUS_DIR = DEFAULT_RAW_DIR.parent
@@ -43,6 +51,8 @@ DEFAULT_OUTPUT = CORPUS_DIR / "dispositivos.json"
 # art. 195 não serve: no texto da EC ele aparece só como linha de pontos.)
 MINIMUM_IDS = ("CF.art149-B", "CF.art156-A", "ADCT.art125", "EC132.art23")
 EC_ARTICLES = range(1, 24)
+# LC 214 (passo 13b): cesta básica, redução de 60% e alíquotas do IS.
+LC_MINIMUM_IDS = ("LC214.art125", "LC214.art128", "LC214.art422")
 
 _CORRECTION_KEYS = {"id", "versao", "efeitos_desde", "efeitos_ate", "fundamento"}
 
@@ -140,20 +150,35 @@ def apply_corrections(
 
 
 def check_minimum(records: list[Record]) -> list[str]:
-    """Estrutura mínima esperada: se faltar, o parser perdeu algo grande."""
+    """Estrutura mínima esperada da EC: se faltar, o parser perdeu algo grande."""
     ids = {r.id for r in records}
     errors = [f"estrutura mínima ausente: {rid}" for rid in MINIMUM_IDS if rid not in ids]
     errors += [f"artigo da EC ausente: EC132.art{n}" for n in EC_ARTICLES if f"EC132.art{n}" not in ids]
     return errors
 
 
+def check_lc_minimum(records: list[Record]) -> list[str]:
+    """Estrutura mínima esperada da LC 214."""
+    ids = {r.id for r in records}
+    return [f"estrutura mínima ausente: {rid}" for rid in LC_MINIMUM_IDS if rid not in ids]
+
+
+def _version_key(versao: str) -> tuple[str, int]:
+    """'EC132.art11' → ('EC132', 11); 'LC214' → ('LC214', 0): ordena versões de normas diferentes."""
+    norma, _, article = versao.partition(".art")
+    return norma, int(article or 0)
+
+
 def _iso(value: date | None) -> str | None:
     return value.isoformat() if value else None
 
 
-def render(records: list[Record], effects: dict[tuple[str, str], Effects], meta: dict) -> str:
-    """JSON determinístico: cabeçalho `fonte` + registros ordenados por (id, artigo da EC)."""
-    ordered = sorted(records, key=lambda r: (r.id, int(r.versao.removeprefix("EC132.art"))))
+def render(records: list[Record], effects: dict[tuple[str, str], Effects], metas: dict[str, dict]) -> str:
+    """JSON determinístico: cabeçalho `fontes` + registros ordenados por (id, versão).
+
+    `metas`: nome da fonte → conteúdo do `.meta.json`, na ordem do cabeçalho.
+    """
+    ordered = sorted(records, key=lambda r: (r.id, _version_key(r.versao)))
     rows = []
     for r in ordered:
         e = effects[(r.id, r.versao)]
@@ -174,42 +199,58 @@ def render(records: list[Record], effects: dict[tuple[str, str], Effects], meta:
             "metodo": e.metodo,
         })
     document = {
-        "fonte": {"url": meta["url"], "coletado_em": meta["coletado_em"], "sha256_html": meta["sha256"]},
+        "fontes": {
+            name: {"url": meta["url"], "coletado_em": meta["coletado_em"], "sha256_html": meta["sha256"]}
+            for name, meta in metas.items()
+        },
         "dispositivos": rows,
     }
     return json.dumps(document, ensure_ascii=False, indent=2) + "\n"
 
 
+def _load_source(raw_dir: Path, name: str) -> tuple[dict, str]:
+    """(meta, html decodificado) de uma fonte, conferindo o sha256."""
+    html_path, meta_path = paths_for(raw_dir, name)
+    if not verify(raw_dir, name):
+        raise BuildError([f"{html_path.name} ausente ou diferente do sha256 em {meta_path.name}"])
+    return json.loads(meta_path.read_text(encoding="utf-8")), decode_html(html_path.read_bytes())
+
+
 def build(raw_dir: Path, corrections_text: str) -> BuildResult:
     """Pipeline inteiro em memória. Levanta BuildError em vez de gravar algo errado."""
-    html_path, meta_path = paths_for(raw_dir, SOURCE_NAME)
-    if not verify(raw_dir, SOURCE_NAME):
-        raise BuildError([f"{html_path.name} ausente ou diferente do sha256 em {meta_path.name}"])
-    meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    html = decode_html(html_path.read_bytes())
+    ec_meta, ec_html = _load_source(raw_dir, "ec132-2023")
+    lc_meta, lc_html = _load_source(raw_dir, "lc214-2025")
 
-    parsed = parse(html)
-    errors = list(parsed.errors) + check_minimum(parsed.records)
+    ec = parse(ec_html)
+    lc = parse_lc(lc_html, norma="LC214", scope=LC214_SCOPE)
+    errors = list(ec.errors) + check_minimum(ec.records) + list(lc.errors) + check_lc_minimum(lc.records)
     if errors:
         raise BuildError(errors)
-    result = effects_for(parsed.records, find_publication_date(t for _, t in paragraphs(html)))
+    ec_effects = effects_for(ec.records, find_publication_date(t for _, t in paragraphs(ec_html)))
+    lc_texts = [p.text for p in lc_paragraphs(lc_html) if not p.struck and p.text]
+    lc_effects = lc_effects_for(lc.records, lc_texts)
+
+    records = ec.records + lc.records
     corrections = load_corrections(corrections_text)
-    effects = apply_corrections(result.by_version, corrections)
+    effects = apply_corrections({**ec_effects.by_version, **lc_effects.by_version}, corrections)
 
     methods = Counter(e.metodo for e in effects.values())
     indeterminate = sorted(f"{rid} ({versao})" for (rid, versao), e in effects.items() if e.metodo == "indeterminado")
+    warnings = ec.warnings + ec_effects.warnings + lc.warnings + lc_effects.warnings
     report = [
-        f"dispositivos: {len(parsed.records)} versões, {len({r.id for r in parsed.records})} ids",
-        "por norma: " + ", ".join(f"{k} {v}" for k, v in sorted(Counter(r.norma for r in parsed.records).items())),
+        f"dispositivos: {len(records)} versões, {len({r.id for r in records})} ids",
+        "por norma: " + ", ".join(f"{k} {v}" for k, v in sorted(Counter(r.norma for r in records).items())),
         "por método: " + ", ".join(f"{k} {v}" for k, v in sorted(methods.items())),
         f"correções aplicadas: {len(corrections)}",
-        f"revogações (art. 22): {len(result.revocations)}",
+        f"revogações (EC 132, art. 22): {len(ec_effects.revocations)}",
+        f"LC 214: {len(lc.records)} registros, {lc.struck} parágrafos tachados descartados, vetados: {', '.join(lc.vetoed) or 'nenhum'}",
         f"indeterminados: {len(indeterminate)}",
         *[f"  - {i}" for i in indeterminate],
-        f"avisos: {len(parsed.warnings) + len(result.warnings)}",
-        *[f"  - {w}" for w in parsed.warnings + result.warnings],
+        f"avisos: {len(warnings)}",
+        *[f"  - {w}" for w in warnings],
     ]
-    return BuildResult(text=render(parsed.records, effects, meta), report=report)
+    metas = {"ec132-2023": ec_meta, "lc214-2025": lc_meta}
+    return BuildResult(text=render(records, effects, metas), report=report)
 
 
 def main(argv: list[str] | None = None) -> int:
