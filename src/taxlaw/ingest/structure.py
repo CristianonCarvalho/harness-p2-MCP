@@ -149,7 +149,8 @@ def _label(text: str, norma: str, ctx: _Context) -> tuple[str, str, str | None] 
 
     None se o parágrafo não começa com rótulo conhecido.
     """
-    prefix = {"CF": "CF", "ADCT": "ADCT", "EC132": "EC 132/2023"}[norma]
+    # LC214: passo 13 (lc_structure.py reaproveita estes rótulos).
+    prefix = {"CF": "CF", "ADCT": "ADCT", "EC132": "EC 132/2023", "LC214": "LC 214/2025"}[norma]
     if m := _ART.match(text):
         number, suffix = int(m.group(1)), m.group(2) or ""
         ctx.reset()
