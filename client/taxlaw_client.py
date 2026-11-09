@@ -10,6 +10,11 @@ Uso (da raiz do repositório ou de qualquer pasta):
     uv run python client/taxlaw_client.py buscar "zona franca de manaus"
     uv run python client/taxlaw_client.py obter CF.art156-A.par1.incIX --data 2030-06-01
     uv run python client/taxlaw_client.py --json buscar "cesta básica"
+    TAXLAW_HTTP_TOKEN=... uv run python client/taxlaw_client.py --url http://127.0.0.1:8000/mcp ferramentas
+
+Com `--url`, fala Streamable HTTP com um server remoto (`python -m
+taxlaw.http`), mandando o token de `TAXLAW_HTTP_TOKEN` no cabeçalho
+`Authorization`. O token nunca vem de argumento nem aparece numa mensagem.
 
 Códigos de saída: 0 sucesso (inclusive "não encontrado"), 1 erro devolvido
 pelo server (isError), 2 erro do cliente (uso, configuração, server que não
@@ -27,13 +32,16 @@ from pathlib import Path
 from typing import Any
 
 import anyio
+import httpx2
 from mcp.client import Client
 from mcp.client.stdio import StdioServerParameters, stdio_client
+from mcp.client.streamable_http import streamable_http_client
 
 # client/taxlaw_client.py → parents[1] é a raiz do repositório.
 DEFAULT_MCP_JSON = Path(__file__).resolve().parents[1] / ".mcp.json"
 SERVER_NAME = "taxlaw"
 TIMEOUT_SECONDS = 30
+TOKEN_ENV = "TAXLAW_HTTP_TOKEN"
 
 
 class ClientError(Exception):
@@ -65,19 +73,56 @@ def server_params(mcp_json: Path, name: str = SERVER_NAME, override: str | None 
     return StdioServerParameters(command=entry["command"], args=list(entry.get("args", [])), cwd=cwd)
 
 
+class HttpTarget:
+    """Um server remoto via Streamable HTTP.
+
+    Classe simples (não dataclass): o teste carrega este arquivo pelo caminho,
+    sem registrá-lo em sys.modules, e @dataclass precisa do módulo registrado.
+    O `repr` não mostra o token.
+    """
+
+    def __init__(self, url: str, token: str):
+        self.url = url
+        self.token = token
+
+    def __repr__(self) -> str:
+        return f"HttpTarget(url={self.url!r}, token=<oculto>)"
+
+
+def http_target(url: str) -> HttpTarget:
+    """Alvo HTTP com o token de TAXLAW_HTTP_TOKEN (nunca de argumento)."""
+    token = os.environ.get(TOKEN_ENV, "")
+    if not token:
+        raise ClientError(f"defina {TOKEN_ENV} com o token do server para usar --url")
+    return HttpTarget(url, token)
+
+
 # ------------------------------------------------------------------ MCP (a única parte que fala protocolo)
 
 
-def _run(params: StdioServerParameters, operation):
-    """Abre o Client via stdio, roda `operation(client)` com teto de tempo e fecha.
+def _run(target: StdioServerParameters | HttpTarget, operation):
+    """Abre o Client (stdio ou HTTP), roda `operation(client)` com teto de tempo e fecha.
 
-    O stderr do server (logs do SDK) vai para /dev/null: o stderr do cliente
-    fica só com as mensagens do cliente.
+    No stdio, o stderr do server (logs do SDK) vai para /dev/null: o stderr do
+    cliente fica só com as mensagens do cliente.
     """
+
+    # Códigos HTTP vistos nesta conexão: o SDK transforma um 401 num erro MCP
+    # genérico, e quem responde o 401 pode ser o proxy, não o server.
+    statuses: list[int] = []
+
+    async def record(response):
+        statuses.append(response.status_code)
 
     async def main():
         with open(os.devnull, "w") as quiet, anyio.fail_after(TIMEOUT_SECONDS):
-            async with Client(stdio_client(params, errlog=quiet)) as client:
+            if isinstance(target, HttpTarget):
+                headers = {"Authorization": f"Bearer {target.token}"}
+                hooks = {"response": [record]}
+                async with httpx2.AsyncClient(headers=headers, timeout=TIMEOUT_SECONDS, event_hooks=hooks) as http:
+                    async with Client(streamable_http_client(target.url, http_client=http)) as client:
+                        return await operation(client)
+            async with Client(stdio_client(target, errlog=quiet)) as client:
                 return await operation(client)
 
     try:
@@ -85,10 +130,12 @@ def _run(params: StdioServerParameters, operation):
     except TimeoutError:
         raise ClientError(f"o server não respondeu em {TIMEOUT_SECONDS} s") from None
     except Exception as exc:  # noqa: BLE001 - qualquer falha de subir/conversar vira código 2
+        if 401 in statuses:
+            raise ClientError("token recusado pelo server") from None
         raise ClientError(f"não consegui falar com o server ({exc.__class__.__name__})") from None
 
 
-def list_tools(params: StdioServerParameters) -> list:
+def list_tools(params: StdioServerParameters | HttpTarget) -> list:
     return _run(params, lambda client: _tools(client))
 
 
@@ -96,7 +143,7 @@ async def _tools(client):
     return (await client.list_tools()).tools
 
 
-def call(params: StdioServerParameters, tool: str, arguments: dict[str, Any]):
+def call(params: StdioServerParameters | HttpTarget, tool: str, arguments: dict[str, Any]):
     """Uma chamada `tools/call`. Devolve o CallToolResult do SDK."""
     return _run(params, lambda client: client.call_tool(tool, arguments))
 
@@ -205,7 +252,9 @@ def render_ferramentas(tools: list) -> str:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="taxlaw_client.py", description="Cliente MCP do server taxlaw (EC 132/2023).")
     parser.add_argument("--json", action="store_true", help="imprime o structuredContent cru")
-    parser.add_argument("--server", help='comando do server, no lugar do .mcp.json (ex.: "python -m taxlaw.server")')
+    where = parser.add_mutually_exclusive_group()
+    where.add_argument("--server", help='comando do server, no lugar do .mcp.json (ex.: "python -m taxlaw.server")')
+    where.add_argument("--url", help=f"server remoto via Streamable HTTP (token em {TOKEN_ENV})")
     parser.add_argument("--mcp-json", type=Path, default=DEFAULT_MCP_JSON, help="arquivo de configuração MCP")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("ferramentas", help="lista as ferramentas do server")
@@ -240,7 +289,7 @@ def _arguments(args: argparse.Namespace) -> tuple[str, dict[str, Any]]:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)  # uso errado: argparse sai com 2
     try:
-        params = server_params(args.mcp_json, override=args.server)
+        params = http_target(args.url) if args.url else server_params(args.mcp_json, override=args.server)
         if args.command == "ferramentas":
             tools = list_tools(params)
             print(json.dumps([t.model_dump(mode="json", by_alias=True, exclude_none=True) for t in tools], ensure_ascii=False, indent=2) if args.json else render_ferramentas(tools))
