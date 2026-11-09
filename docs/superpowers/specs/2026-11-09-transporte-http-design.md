@@ -31,7 +31,7 @@ Permitir que um cliente MCP em **outra máquina** use o taxlaw, como primeira et
 
 - **`BearerTokenMiddleware(app, token: str)`:** um middleware ASGI.
   - Para requisições HTTP, lê o cabeçalho `authorization` e só aceita `Bearer <token>`, comparado com `hmac.compare_digest`.
-  - Se falhar, responde **401** com `WWW-Authenticate: Bearer` e o corpo JSON `{"erro": "nao_autorizado"}`, sem repetir o que veio.
+  - Se falhar, responde **401** com `WWW-Authenticate: Bearer` e, como corpo, um erro JSON-RPC: `{"jsonrpc": "2.0", "id": null, "error": {"code": -32001, "message": "nao_autorizado"}}`, sem repetir o que veio. *(Ajuste do protótipo: o cliente do SDK repassa um erro JSON-RPC recebido com status de erro, em vez de um genérico "Server returned an error response", então qualquer cliente MCP entende a recusa.)*
   - Escopos que não são HTTP (`lifespan`) passam direto.
 - **`build_http_app(server, *, token: str, allowed_hosts: list[str]) -> ASGI app`:**
   - `server.streamable_http_app(stateless_http=True, json_response=True, max_request_body_size=65536, transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=True, allowed_hosts=allowed_hosts, allowed_origins=[]))`;
@@ -51,7 +51,7 @@ Permitir que um cliente MCP em **outra máquina** use o taxlaw, como primeira et
   - o token vem de `TAXLAW_HTTP_TOKEN`; sem ele, o cliente sai com 2 antes de conectar;
   - a conexão é `Client(streamable_http_client(url, http_client=httpx2.AsyncClient(headers={"Authorization": f"Bearer {token}"})))`.
 - **Mensagens de erro (código 2), sem o token:**
-  - 401 vira "token recusado pelo server";
+  - 401 vira "token recusado pelo server". O cliente reconhece o 401 pelo código HTTP de cada resposta (um "event hook" do httpx), não pelo corpo, então funciona mesmo quando quem responde é o proxy;
   - uma conexão recusada vira "não consegui falar com o server".
 - Continua sem importar `taxlaw`.
 
@@ -77,8 +77,8 @@ Permitir que um cliente MCP em **outra máquina** use o taxlaw, como primeira et
 | Situação | Resultado |
 |---|---|
 | Server sem token, ou com token curto | Não sobe; código 2; mensagem sem o valor |
-| Requisição sem token, com token errado ou com outro esquema | 401, `{"erro": "nao_autorizado"}` |
-| `Host` fora da lista | A recusa da proteção do SDK (código HTTP medido no protótipo e registrado no plano) |
+| Requisição sem token, com token errado ou com outro esquema | 401, com o erro JSON-RPC `nao_autorizado` (código -32001) |
+| `Host` fora da lista | 421 "Invalid Host header", da proteção do SDK (medido no protótipo) |
 | Corpo acima de 64 KB | 413 |
 | Erro de ferramenta | Igual ao stdio: `isError` com `{"erro", "mensagem"}` |
 | Cliente: 401, server fora do ar ou token ausente | Código 2, sem o token na mensagem |
@@ -100,10 +100,11 @@ Os testes sobem o server HTTP real num subprocesso (`python -m taxlaw.http`), nu
   - um `Host` fora da lista é recusado;
   - um corpo acima de 64 KB dá 413.
 - **CPF pela rede:** um CPF sintético na consulta dá `dados_de_contribuinte`, sem o número na saída.
-- **Partida:**
+- **Partida:** num subprocesso com tempo máximo, para que uma regressão falhe em vez de pendurar a suíte:
   - sem `TAXLAW_HTTP_TOKEN`, sai com 2;
-  - com token de 10 caracteres, sai com 2, e a mensagem não contém o valor.
+  - com token curto, sai com 2, e a mensagem não contém o valor.
 - **Unidade:** o `BearerTokenMiddleware` com um app ASGI falso aceita o token certo, recusa os demais e deixa o `lifespan` passar.
+- **O cliente sem dataclass:** `HttpTarget` é uma classe simples, porque o teste carrega o cliente pelo caminho do arquivo, sem registrá-lo em `sys.modules`, e `@dataclass` precisa do módulo registrado.
 
 ## 7. Fora do escopo (passo seguinte: deploy)
 
