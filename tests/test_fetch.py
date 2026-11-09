@@ -171,3 +171,46 @@ def test_fetch_is_the_only_module_that_imports_network_libraries():
                 names = [node.module]
             offenders += [f"{path.name}: {n}" for n in names if n.split(".")[0] in NETWORK_MODULES]
     assert offenders == []
+
+
+# ------------------------------------------------------- várias fontes (passo 13)
+
+LC_PAGE = (
+    "<html><head><meta charset=windows-1252><title>Lcp 214</title></head><body>"
+    "<p>LEI COMPLEMENTAR Nº 214, DE 16 DE JANEIRO DE 2025</p>"
+    "<p>Institui o IBS e a CBS; altera a Emenda Constitucional nº 132.</p></body></html>"
+).encode("windows-1252")
+
+
+def test_sources_registry_has_both_norms_and_default_is_ec():
+    assert fetch.DEFAULT_SOURCE == SOURCE_NAME == "ec132-2023"
+    assert fetch.SOURCES["lc214-2025"].url == "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp214.htm"
+    assert fetch.SOURCES[SOURCE_NAME].url == SOURCE_URL
+
+
+def test_source_option_saves_under_its_own_name_and_url(tmp_path):
+    get = fake_get(LC_PAGE)
+    assert main(["--source", "lc214-2025", "--raw-dir", str(tmp_path)], get=get, today=lambda: TODAY) == 0
+    assert get.calls == ["https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp214.htm"]
+    meta = json.loads((tmp_path / "lc214-2025.meta.json").read_text(encoding="utf-8"))
+    assert meta["url"].endswith("lcp214.htm") and (tmp_path / "lc214-2025.html").read_bytes() == LC_PAGE
+    assert not (tmp_path / "ec132-2023.html").exists()
+
+
+def test_lc_page_is_not_accepted_as_the_ec(tmp_path, capsys):
+    # A LC 214 cita a EC 132 no corpo: só o <title> distingue as duas.
+    assert main(["--raw-dir", str(tmp_path)], get=fake_get(LC_PAGE), today=lambda: TODAY) == 2
+    assert "título" in capsys.readouterr().err
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_ec_page_is_not_accepted_as_the_lc(tmp_path):
+    ec_page = PAGE.replace(b"<head>", b"<head><title>Emenda Constitucional n\xba 132</title>")
+    with pytest.raises(FetchError):
+        check_looks_like_source(ec_page, fetch.SOURCES["lc214-2025"])
+
+
+def test_title_number_must_be_whole():
+    page = LC_PAGE.replace(b"Lcp 214", b"Lcp 2140")
+    with pytest.raises(FetchError):
+        check_looks_like_source(page, fetch.SOURCES["lc214-2025"])
