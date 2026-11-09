@@ -75,3 +75,22 @@ def test_responses_are_json_serializable_and_small():
     assert biggest < 8000
     search = buscar_dispositivos(CTX, "imposto bens serviços", limite=10, today=TODAY)
     assert len(json.dumps(search, ensure_ascii=False)) < 8000
+
+
+def test_source_url_follows_the_device_norm():
+    # Passo 13b: cada dispositivo aponta para a norma de onde veio.
+    assert obter("LC214.art125")["fonte_url"] == "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp214.htm"
+    assert obter("CF.art156-A")["fonte_url"].endswith("/emc132.htm")
+
+
+def test_corpus_collected_date_is_the_oldest_source():
+    fontes = CTX.corpus.fontes
+    assert obter("LC214.art125")["corpus"]["coletado_em"] == min(f["coletado_em"] for f in fontes.values()) == "2026-11-06"
+
+
+def test_lc_device_vigor_before_effects():
+    before, after = obter("LC214.art128.incI", "2025-06-01"), obter("LC214.art128.incI", "2026-06-01")
+    assert before["vigor_desde"] == "2025-01-16" and before["efeitos"]["produz_efeitos_na_data"] is False
+    assert after["efeitos"]["produz_efeitos_na_data"] is True
+    assert obter("LC214.art142.incII")["efeitos"]["produz_efeitos_na_data"] is None
+

@@ -65,7 +65,8 @@ ROWS = [
 
 @pytest.fixture
 def ctx(tmp_path):
-    document = {"fonte": {"url": "https://exemplo.invalid/ec", "coletado_em": "2026-11-06", "sha256_html": "ab" * 32}, "dispositivos": ROWS}
+    fontes = {"ec132-2023": {"url": "https://exemplo.invalid/ec", "coletado_em": "2026-11-06", "sha256_html": "ab" * 32}}
+    document = {"fontes": fontes, "dispositivos": ROWS}
     path = tmp_path / "dispositivos.json"
     path.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
     return load_context(path)

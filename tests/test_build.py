@@ -4,6 +4,7 @@ As partes puras usam dados sintéticos. Os testes da CLI usam o corpus/raw
 real como entrada (só leitura) e gravam sempre em tmp_path.
 """
 
+import hashlib
 import json
 import shutil
 from datetime import date
@@ -121,14 +122,21 @@ def test_minimum_structure():
 
 # -------------------------------------------------------------------- render
 
-META = {"url": "https://exemplo.invalid/ec", "coletado_em": "2026-11-06", "sha256": "ab" * 32}
+METAS = {
+    "ec132-2023": {"url": "https://exemplo.invalid/ec", "coletado_em": "2026-11-06", "sha256": "ab" * 32},
+    "lc214-2025": {"url": "https://exemplo.invalid/lc", "coletado_em": "2026-11-09", "sha256": "cd" * 32},
+}
 
 
 def test_render_orders_by_id_then_ec_article_and_uses_spec_fields():
     records = [rec("CF.art10", 10), rec("CF.art10", 3), rec("ADCT.art1", 2)]
     effects = {(r.id, r.versao): AUTO for r in records}
-    document = json.loads(render(records, effects, META))
-    assert document["fonte"] == {"url": "https://exemplo.invalid/ec", "coletado_em": "2026-11-06", "sha256_html": "ab" * 32}
+    document = json.loads(render(records, effects, METAS))
+    assert document["fontes"] == {
+        "ec132-2023": {"url": "https://exemplo.invalid/ec", "coletado_em": "2026-11-06", "sha256_html": "ab" * 32},
+        "lc214-2025": {"url": "https://exemplo.invalid/lc", "coletado_em": "2026-11-09", "sha256_html": "cd" * 32},
+    }
+    assert list(document["fontes"]) == ["ec132-2023", "lc214-2025"]
     rows = document["dispositivos"]
     # art. 3 antes do art. 10: ordem numérica, não alfabética ("art10" < "art3" como texto)
     assert [(r["id"], r["versao"]) for r in rows] == [("ADCT.art1", "EC132.art2"), ("CF.art10", "EC132.art3"), ("CF.art10", "EC132.art10")]
@@ -141,8 +149,8 @@ def test_render_orders_by_id_then_ec_article_and_uses_spec_fields():
 
 def test_render_is_byte_stable_and_keeps_accents():
     records = [rec("CF.art10")]
-    text = render(records, {(r.id, r.versao): AUTO for r in records}, META)
-    assert text == render(records, {(r.id, r.versao): AUTO for r in records}, META)
+    text = render(records, {(r.id, r.versao): AUTO for r in records}, METAS)
+    assert text == render(records, {(r.id, r.versao): AUTO for r in records}, METAS)
     assert "citação" in text and text.endswith("}\n")
 
 
@@ -158,11 +166,15 @@ def run(tmp_path: Path, *extra: str, raw_dir: Path = RAW_DIR, corrections: str =
 def test_cli_writes_report_and_file(tmp_path, capsys):
     assert run(tmp_path) == 0
     out = capsys.readouterr().out
-    assert "dispositivos: 487 versões, 474 ids" in out
-    assert "indeterminados: 0" in out and "avisos: 0" in out
+    # EC 132 (487 versões, 474 ids) + LC 214 (162 registros, passo 13b).
+    assert "dispositivos: 649 versões, 636 ids" in out
+    assert "por norma: ADCT 132, CF 196, EC132 159, LC214 162" in out
+    # Os 4 indeterminados são os dispositivos tocados pela LC 227/2026.
+    assert "indeterminados: 4" in out and "avisos: 0" in out
     document = json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))
-    assert len(document["dispositivos"]) == 487
-    assert document["fonte"]["coletado_em"] == "2026-11-06"
+    assert len(document["dispositivos"]) == 649
+    assert document["fontes"]["ec132-2023"]["coletado_em"] == "2026-11-06"
+    assert document["fontes"]["lc214-2025"]["coletado_em"] == "2026-11-09"
 
 
 def test_cli_is_deterministic_and_check_mode(tmp_path, capsys):
@@ -203,3 +215,17 @@ def test_cli_applies_a_real_correction(tmp_path, capsys):
     rows = json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))["dispositivos"]
     row = next(r for r in rows if r["id"] == "ADCT.art125")
     assert (row["efeitos_desde"], row["metodo"], row["fundamento_efeitos"]) == ("2026-01-01", "correcao", "teste sintético de correção")
+
+
+def test_cli_lc_error_aborts_without_writing(tmp_path, capsys):
+    # Passo 13b: erro do parser da LC também aborta o build (aqui, um artigo do escopo some).
+    raw = tmp_path / "raw"
+    shutil.copytree(RAW_DIR, raw)
+    html = (raw / "lc214-2025.html").read_bytes().replace(b"Art. 125.", b"Art. 9125.")
+    (raw / "lc214-2025.html").write_bytes(html)
+    meta = json.loads((raw / "lc214-2025.meta.json").read_text(encoding="utf-8"))
+    meta["sha256"] = hashlib.sha256(html).hexdigest()
+    (raw / "lc214-2025.meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    assert run(tmp_path, raw_dir=raw) == 1
+    assert not (tmp_path / "out.json").exists()
+    assert "artigo do escopo não encontrado: LC214.art125" in capsys.readouterr().err

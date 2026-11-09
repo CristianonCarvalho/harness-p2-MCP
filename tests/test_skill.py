@@ -111,8 +111,11 @@ def test_law_wording_table_finds_the_anchor(phrase, anchor):
 
 
 @pytest.mark.parametrize("abbreviation", ["IBS", "CBS"])
-def test_abbreviations_alone_are_not_found_which_is_why_the_table_exists(abbreviation):
-    assert tools.buscar_dispositivos(CTX, abbreviation, "2030-06-01", today=TODAY)["encontrado"] is False
+def test_abbreviations_alone_reach_only_the_lc_which_is_why_the_table_exists(abbreviation):
+    # A EC e a CF não usam as siglas; a LC 214 (passo 13b) usa. A sigla sozinha
+    # acha a LC, mas nunca o dispositivo da Constituição que institui o tributo.
+    out = tools.buscar_dispositivos(CTX, abbreviation, "2030-06-01", limite=10, today=TODAY)
+    assert out["resultados"] and all(r["id"].startswith("LC214.") for r in out["resultados"])
 
 
 @pytest.mark.parametrize(
