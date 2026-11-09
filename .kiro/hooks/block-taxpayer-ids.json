@@ -1,0 +1,19 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "bloquear CPF/CNPJ no taxlaw",
+      "trigger": "PreToolUse",
+      "matcher": "@taxlaw",
+      "action": {"type": "command", "command": "uv run --quiet python hooks/block_taxpayer_ids.py"},
+      "timeout": 30
+    },
+    {
+      "name": "bloquear CPF/CNPJ na web",
+      "trigger": "PreToolUse",
+      "matcher": "web",
+      "action": {"type": "command", "command": "uv run --quiet python hooks/block_taxpayer_ids.py"},
+      "timeout": 30
+    }
+  ]
+}
