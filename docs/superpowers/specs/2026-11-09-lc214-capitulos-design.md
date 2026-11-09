@@ -31,7 +31,7 @@ Arquivo coletado pelo navegador com `fetch(location.href)` em `https://www.plana
   - V: 2033-01-01;
   - VI: 2026-01-01, "em relação aos demais dispositivos".
 - **Publicação.** A 1ª nota é "Este texto não substitui o publicado no DOU de 16.1.2025 - Edição extra e republicado no DOU de 23.1.2025". A nota de 2.7.2025 é da promulgação de partes vetadas.
-- **Vetos.** No escopo, só o art. 138, § 4º, e o art. 138, II, ambos "(VETADO)". Nenhuma "(Promulgação partes vetadas)" no escopo; fora dele há, por exemplo no art. 26.
+- **Vetos.** No escopo, só o art. 138, § 4º, e o art. 138, § 9º, II, ambos "(VETADO)" *(corrigido no protótipo do 13a: antes dizia "art. 138, II")*. Nenhuma "(Promulgação partes vetadas)" no escopo; fora dele há, por exemplo no art. 26.
 - **Alterações da LC 227 no escopo:** art. 126, § 6º (incluído), art. 142, II (redação dada), e art. 422, §§ 2º e 5º (redação dada).
 - **Anexos.** As listas concretas (produtos da cesta básica, serviços e produtos com redução) estão em tabelas nos Anexos, que **não** fazem parte do escopo.
 
@@ -92,7 +92,7 @@ Função nova `lc_effects_for(records, paragraphs)` em `ingest/lc_effects.py`, n
 
 ## 6. Coleta e build com duas fontes
 
-- **Coleta.** `fetch.py` deixa de ter a fonte fixa e passa a receber nome e URL (`--source-name`, `--source-url`). Os padrões continuam os da EC, para não mudar o comportamento atual. O arquivo vai para `corpus/raw/lc214-2025.html` com `lc214-2025.meta.json` (`metodo_coleta: arquivo`).
+- **Coleta.** `fetch.py` deixa de ter a fonte fixa: um registro `SOURCES` guarda, por norma, nome, URL, marcadores do corpo e o número que precisa estar no `<title>`, e a CLI escolhe com `--source` (padrão: a EC 132). *(Ajuste do protótipo do 13a: a LC 214 cita a EC 132 no corpo, então os marcadores do corpo a aceitavam como EC e sobrescreviam `ec132-2023.html`; o `<title>` distingue as duas.)* O arquivo vai para `corpus/raw/lc214-2025.html` com `lc214-2025.meta.json` (`metodo_coleta: arquivo`).
 - **Fontes.** `build` passa a ler uma lista fixa: `ec132-2023` (structure + effects da EC) e `lc214-2025` (lc_structure + lc_effects). Cada fonte confere o próprio sha256.
 - **Cabeçalho.** `fonte` vira `fontes: {"ec132-2023": {url, coletado_em, sha256_html}, "lc214-2025": {…}}`. Os registros mantêm 14 campos.
 - **Fonte de cada registro.** É deduzida da `versao`: `EC132.*` vem de `ec132-2023`, e `LC214` de `lc214-2025`. Isso fica numa função só, em `corpus.py`.
@@ -132,7 +132,7 @@ Função nova `lc_effects_for(records, paragraphs)` em `ingest/lc_effects.py`, n
   - nenhum `texto` do corpus é igual a um parágrafo tachado do HTML;
   - os 4 dispositivos da LC 227 com `indeterminado`;
   - os demais com vigor 2025-01-16 e efeitos 2026-01-01 (art. 544, VI);
-  - o art. 138, § 4º, e o art. 138, II, ausentes (vetados);
+  - o art. 138, § 4º, e o art. 138, § 9º, II, ausentes (vetados);
   - pares (`id`, `versao`) únicos e `pai` existente;
   - `dispositivos.json` versionado igual ao build de hoje.
 - **Conferidos pelo usuário:** de 5 a 8 dispositivos da LC conferidos à mão contra o Planalto (texto, citação, efeitos), que viram um teste, como no passo 07.
