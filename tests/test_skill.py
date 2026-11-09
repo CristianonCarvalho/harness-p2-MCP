@@ -68,7 +68,7 @@ def test_frontmatter_name_matches_directory_and_description_has_triggers():
     description = meta["description"]
     # A lista de skills trunca description em 1.536 caracteres; a nossa cabe com folga.
     assert 0 < len(description) <= 1024
-    for trigger in ("reforma tributária", "EC 132", "IBS", "CBS", "Imposto Seletivo", "transição", "já está valendo"):
+    for trigger in ("reforma tributária", "EC 132", "LC 214", "IBS", "CBS", "Imposto Seletivo", "cesta básica", "redução de alíquota", "transição", "já está valendo"):
         assert trigger in description, trigger
 
 
@@ -101,6 +101,11 @@ def test_every_tool_and_field_cited_exists_in_the_server():
         ("contribuição sobre bens e serviços", "CF.art195.incV"),
         ("bens e serviços prejudiciais à saúde ou ao meio ambiente", "CF.art153.incVIII"),
         ("Comitê Gestor do Imposto sobre Bens e Serviços", "CF.art156-B"),
+        # LC 214 (passo 13c): o âncora é o artigo da LC.
+        ("cesta básica nacional de alimentos", "LC214.art125"),
+        ("reduzidas em 60% serviços de educação", "LC214.art128"),
+        ("reduzidas em 30% profissionais", "LC214.art127"),
+        ("alíquotas do imposto seletivo", "LC214.art422"),
     ],
 )
 def test_law_wording_table_finds_the_anchor(phrase, anchor):

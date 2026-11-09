@@ -16,7 +16,7 @@ MCP server que busca dispositivos da reforma tributária (EC 132/2023) e respond
 
 ```
 uv sync
-uv run pytest                      # 347 testes, todos offline
+uv run pytest                      # 442 testes, todos offline
 uv run python -m taxlaw.server     # o server via stdio (normalmente é o cliente que o sobe)
 ```
 
@@ -32,7 +32,7 @@ O contrato completo está na [spec, seção 6](docs/superpowers/specs/2026-11-05
 ## Arquitetura
 
 ```
-Planalto (HTML) ──navegador──▶ corpus/raw/ ──build (puro, determinístico)──▶ corpus/dispositivos.json
+Planalto (EC 132 e LC 214, HTML) ──navegador──▶ corpus/raw/ ──build (puro, determinístico)──▶ corpus/dispositivos.json
                                                                               │
 cliente MCP ──hook PreToolUse──▶ server.py (guarda antes do SDK) ──▶ tools.py ──▶ search.py (BM25) + versions.py (data)
 ```
@@ -47,7 +47,7 @@ Diagramas: [corpus](docs/diagramas/bloco-2-corpus.md), [sequência de uma consul
 
 | Tema | Decisão | Por quê |
 |---|---|---|
-| Corpus | Só a EC 132/2023 e os dispositivos da CF e do ADCT que ela inclui ou altera (487 versões, 474 ids) | A LC 214 inteira não cabia em passos pequenos |
+| Corpus | A EC 132/2023 e os dispositivos da CF e do ADCT que ela inclui ou altera (487 versões), mais, da LC 214/2025, cesta básica, reduções de 30% e 60% e alíquotas do Imposto Seletivo (162 registros) | A LC 214 inteira (mais de 500 artigos, compilada com 766 marcas de alteração da LC 227/2026) não cabe em passos pequenos; os capítulos escolhidos respondem o que a EC deixa para a lei complementar |
 | Data que importa | Produção de efeitos (`efeitos_desde`/`efeitos_ate`), separada de entrada em vigor | Um campo só, "vigência", confunde as duas coisas |
 | Versões | Um registro por (`id`, artigo da EC). A ferramenta escolhe a versão pela `data_referencia` | O mesmo inciso tem três redações na própria EC (2023, 2027 e 2033) |
 | Datas de efeito | Automáticas a partir do art. 23 da EC; um arquivo de correções exige fundamento para cada exceção; o que o parser não resolve fica `indeterminado` | Nunca inventar uma data |
@@ -60,12 +60,14 @@ Diagramas: [corpus](docs/diagramas/bloco-2-corpus.md), [sequência de uma consul
 
 ## Limites conhecidos
 
-- **Corpus parcial.** Não há LC 214, resoluções do Senado nem leis dos entes. A ferramenta responde o que a EC diz; alíquotas concretas, por exemplo, ficam fora.
+- **Corpus parcial.** Da LC 214 há só alguns capítulos (cesta básica, reduções de 30% e 60%, alíquotas do Imposto Seletivo). Não há os demais capítulos da LC (fato gerador, base de cálculo, transição), os Anexos (as listas de produtos e serviços), resoluções do Senado nem leis dos entes. Alíquotas concretas, por exemplo, ficam fora.
+- **Alterações da LC 227/2026.** Na LC 214, entra só a redação atual. Os 4 dispositivos alterados ou incluídos pela LC 227 ficam com efeitos `indeterminado` (a data está na LC 227, fora do corpus), e a redação anterior é descartada.
+- **Vigor e efeitos separados.** Na LC 214, a lei vigora desde a publicação (2025-01-16), mas os capítulos do corpus só produzem efeitos a partir de 2026-01-01 (art. 544, VI). Um artigo citado com ressalva no art. 544 fica `indeterminado` no artigo inteiro.
 - **Redação anterior ausente.** Para dispositivos `alterado`, o texto que valia antes da EC não está no corpus, e a ferramenta diz isso.
 - **Efeito não é cobrança.** Um dispositivo pode produzir efeitos antes de o tributo ser cobrado; a cobrança segue a transição do ADCT (arts. 124 a 137). Juntar as peças é tarefa do modelo, e a skill pede isso.
 - **Ancestrais omitidos.** A EC cita alguns caputs só como linha de pontos (ex.: o caput do art. 195 da CF). Eles não estão no corpus.
 - **Busca lexical:**
-  - siglas (IBS, CBS, IS) e palavras que a EC não usa (ICMS, split payment) não acham nada;
+  - siglas (IBS, CBS) acham só a LC 214, que as usa; a EC e a CF não, então a sigla nunca leva à Constituição. Palavras que nenhuma das normas usa (ICMS, split payment) não acham nada;
   - dispositivos de tributos diferentes com a mesma frase empatam: o do Imposto Seletivo veio à frente do do IBS.
 
   A skill compensa em parte, com a tabela "usuário diz → busque".
@@ -75,7 +77,7 @@ Diagramas: [corpus](docs/diagramas/bloco-2-corpus.md), [sequência de uma consul
   - não vê números disfarçados (com espaços entre os dígitos, por extenso). Esse é o alvo do P4.
 - **Skill.** O carregamento automático pela `description` é decisão do modelo. Nos testes deste projeto, ela só entrou com certeza quando foi invocada por `/consultar-reforma-tributaria`.
 - **Kiro.** O server foi verificado numa consulta real. O hook e a skill no Kiro estão cobertos por testes, mas não foram vistos funcionando lá.
-- **Coleta manual.** O Planalto derruba clientes automatizados. O HTML foi baixado pelo navegador, e atualizar o corpus é um passo manual.
+- **Coleta manual.** O Planalto derruba clientes automatizados. Os HTML foram baixados pelo navegador, e atualizar o corpus é um passo manual.
 
 ## O que deu errado
 

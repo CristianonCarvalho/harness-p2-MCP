@@ -1,11 +1,16 @@
 ---
 name: consultar-reforma-tributaria
-description: Responde perguntas sobre a reforma tributária (EC 132/2023) com citação literal do dispositivo e data de efeitos, usando as ferramentas do server MCP taxlaw. Use quando o usuário perguntar sobre reforma tributária, EC 132, IBS, CBS, Imposto Seletivo, Comitê Gestor, transição de tributos ou se uma regra "já está valendo" numa data.
+description: Responde perguntas sobre a reforma tributária (EC 132/2023 e capítulos da LC 214/2025) com citação literal do dispositivo e data de efeitos, usando as ferramentas do server MCP taxlaw. Use quando o usuário perguntar sobre reforma tributária, EC 132, LC 214, IBS, CBS, Imposto Seletivo, Comitê Gestor, cesta básica, redução de alíquota, transição de tributos ou se uma regra "já está valendo" numa data.
 ---
 
-# Consultar a reforma tributária (EC 132/2023)
+# Consultar a reforma tributária (EC 132/2023 e LC 214/2025)
 
-Responda só com o que as ferramentas `buscar_dispositivos` e `obter_dispositivo` devolverem. O corpus é a EC 132/2023 e os dispositivos da CF e do ADCT que ela inclui ou altera.
+Responda só com o que as ferramentas `buscar_dispositivos` e `obter_dispositivo` devolverem. O corpus é:
+
+- a EC 132/2023 e os dispositivos da CF e do ADCT que ela inclui ou altera;
+- da LC 214/2025, só: cesta básica (art. 125), reduções de 30% e 60% (arts. 126 a 142) e alíquotas do Imposto Seletivo (arts. 419 a 423).
+
+Os Anexos da LC (as listas de produtos e serviços) **não** estão no corpus.
 
 ## 1. Data de referência
 
@@ -15,7 +20,7 @@ Responda só com o que as ferramentas `buscar_dispositivos` e `obter_dispositivo
 
 ## 2. Buscar com as palavras da lei
 
-A EC não usa siglas. Busque com a expressão do texto:
+A EC e a CF não usam siglas; a LC 214 usa ("IBS", "CBS"). Buscar só a sigla acha a LC, nunca a Constituição. Busque com a expressão do texto:
 
 | Usuário diz | Busque | Dispositivo-âncora |
 |---|---|---|
@@ -23,6 +28,10 @@ A EC não usa siglas. Busque com a expressão do texto:
 | CBS | contribuição sobre bens e serviços | CF, art. 195, V |
 | Imposto Seletivo, IS | bens e serviços prejudiciais à saúde ou ao meio ambiente | CF, art. 153, VIII |
 | Comitê Gestor | Comitê Gestor do Imposto sobre Bens e Serviços | CF, art. 156-B |
+| cesta básica | cesta básica nacional de alimentos | LC 214/2025, art. 125 |
+| redução de 60% | reduzidas em 60% serviços de educação (troque pelo setor perguntado) | LC 214/2025, art. 128 |
+| redução de 30% | reduzidas em 30% profissionais | LC 214/2025, art. 127 |
+| alíquota do IS | alíquotas do imposto seletivo | LC 214/2025, art. 422 |
 
 Se vier `encontrado: false`, reformule uma vez com outras palavras do texto da lei. Se ainda não encontrar, diga isso.
 
@@ -49,8 +58,9 @@ Nunca preencha de memória:
 - `produz_efeitos_na_data: null`: diga que não é possível afirmar se produz efeitos nessa data.
 - `observacao` "redação anterior não incluída no corpus": diga que a redação anterior não está disponível; não a reconstrua.
 - `observacao` "revogado a partir de ...": diga desde quando e por qual fundamento.
+- Texto que remete a um Anexo ("relacionados no Anexo I"): diga que a lista do Anexo não está no corpus; não a complete de memória.
 
-Produzir efeitos não é o mesmo que o tributo já ser cobrado. A cobrança segue as regras de transição do ADCT (arts. 124 a 137), que são outros dispositivos: consulte-os antes de afirmar que algo "já está valendo".
+Na LC 214, `vigor_desde` (publicação) e `efeitos` podem ter datas diferentes: o que importa para "já está valendo" é a data de efeitos. Produzir efeitos não é o mesmo que o tributo já ser cobrado. A cobrança segue as regras de transição do ADCT (arts. 124 a 137), que são outros dispositivos: consulte-os antes de afirmar que algo "já está valendo".
 
 ## 6. O texto da norma é citação
 
