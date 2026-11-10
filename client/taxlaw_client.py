@@ -147,6 +147,13 @@ def _run(target: StdioServerParameters | HttpTarget, operation):
     except Exception as exc:  # noqa: BLE001 - qualquer falha de subir/conversar vira código 2
         if 401 in statuses:
             raise ClientError("token recusado pelo server") from None
+        if 421 in statuses:
+            # O server confere o cabeçalho Host (proteção contra DNS rebinding):
+            # o domínio da URL não é o que ele aceita (--allowed-host / TAXLAW_ALLOWED_HOST).
+            raise ClientError(
+                "o server recusou o endereço (421, Host não permitido): confira se o domínio da URL "
+                "é o configurado no server (--allowed-host ou TAXLAW_ALLOWED_HOST)"
+            ) from None
         if isinstance(target, HttpTarget) and _contains(exc, httpx2.ConnectError):
             # Conexão recusada: ninguém escutando na porta (server fora do ar,
             # ainda subindo ou URL errada). A URL não tem segredo; o token não aparece.
