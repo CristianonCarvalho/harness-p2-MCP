@@ -43,13 +43,12 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
-@pytest.fixture(scope="module")
-def server():
-    """O server HTTP rodando; devolve a URL do endpoint MCP."""
+def running_server(*extra_args):
+    """Sobe `python -m taxlaw.http` numa porta livre; gera a URL e encerra no fim."""
     port = free_port()
     env = {**os.environ, TOKEN_ENV: TOKEN}
     process = subprocess.Popen(
-        [sys.executable, "-m", "taxlaw.http", "--port", str(port)],
+        [sys.executable, "-m", "taxlaw.http", "--port", str(port), *extra_args],
         env=env, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
     deadline = time.monotonic() + 30
@@ -64,6 +63,22 @@ def server():
     yield f"http://127.0.0.1:{port}/mcp"
     process.terminate()
     process.wait(timeout=10)
+
+
+@pytest.fixture(scope="module")
+def server():
+    """O server HTTP rodando, aceitando 127.0.0.1 e localhost; devolve a URL do endpoint MCP."""
+    yield from running_server()
+
+
+@pytest.fixture(scope="module")
+def server_for_another_host():
+    """Server que só aceita o Host outro.invalid: toda chamada para 127.0.0.1 recebe 421.
+
+    É o erro de configuração mais provável no deploy (o --allowed-host não é o
+    domínio que o cliente usa).
+    """
+    yield from running_server("--allowed-host", "outro.invalid")
 
 
 def post(url, body=TOOLS_LIST, headers=None):
@@ -137,6 +152,13 @@ def test_client_with_wrong_or_missing_token_is_exit_2_without_echo(server, capsy
     assert code == 2 and out == ""
     assert ("token recusado pelo server" in err) if token else (TOKEN_ENV in err)
     assert TOKEN not in err and (token is None or token not in err.replace(TOKEN_ENV, ""))
+
+
+def test_client_explains_a_refused_host(server_for_another_host, capsys, monkeypatch):
+    code, out, err = run_cli(capsys, monkeypatch, server_for_another_host, "ferramentas")
+    assert code == 2 and out == ""
+    assert "o server recusou o endereço" in err and "Host" in err and "421" in err
+    assert TOKEN not in err
 
 
 def test_client_cannot_reach_a_closed_port(capsys, monkeypatch):
