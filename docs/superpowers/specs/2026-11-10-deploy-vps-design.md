@@ -1,7 +1,7 @@
 # P2, extra: deploy do taxlaw na VPS (design)
 
 - **Data:** 2026-11-10
-- **Status:** design aprovado em conversa (partes 1 e 2); aguardando revisão desta spec escrita.
+- **Status:** implementado (tag `step-deploy`) e verificado na VPS em 2026-11-10; ver a nota `docs/steps/deploy.md`.
 - **Depende de:** [2026-11-09-transporte-http-design.md](2026-11-09-transporte-http-design.md). O server HTTP com token já existe (`python -m taxlaw.http`). Este passo o publica.
 
 ## 1. Objetivo

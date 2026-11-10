@@ -1,7 +1,7 @@
 # P2: MCP server de legislação da reforma tributária (design)
 
 - **Data:** 2026-11-05
-- **Status:** aprovado em conversa; aguardando revisão desta spec escrita
+- **Status:** implementado. Os três critérios de concluído foram cumpridos e verificados (passos 10, 11, 12 e 14; ver o `README.md`). O que veio depois está em specs próprias: [LC 214](2026-11-09-lc214-capitulos-design.md), [cliente de terminal](2026-11-09-cliente-mcp-design.md), [transporte HTTP](2026-11-09-transporte-http-design.md) e [deploy na VPS](2026-11-10-deploy-vps-design.md).
 - **Roadmap:** Fase 2 (engenharia de contexto e harness), projeto P2. Ver `CLAUDE.md`.
 
 ## 1. Objetivo e critério de concluído
@@ -34,7 +34,7 @@ Critério de concluído (do roadmap, não negociável):
 | Ferramentas | Duas: `buscar_dispositivos` e `obter_dispositivo` | Ferramenta de vigência separada: redundante. Ferramenta única: opaca e difícil de avaliar |
 | Busca | Lexical, determinística (BM25 implementado no projeto) | Embeddings ou LLM no server: não determinístico, exige rede ou modelo |
 | Protocolo | Passo didático com MCP feito à mão (descartável) e depois o server real com o SDK oficial | Só na mão: risco de quebrar compatibilidade. Só SDK: perde a visão do protocolo |
-| Transporte | stdio | HTTP: exige servidor rodando, sem ganho aqui |
+| Transporte | stdio para o Claude Code e o Kiro. **Streamable HTTP stateless, com token, acrescentado depois** para acesso remoto (spec do transporte HTTP), sem substituir o stdio | HTTP como único transporte: exige servidor rodando e uma porta, sem ganho para um corpus que mora no repositório. Só passou a valer quando surgiu o uso remoto |
 | Ação proibida | CPF/CNPJ nos argumentos de ferramentas, bloqueado por hook e também dentro do server | Escrita no corpus; resposta sem citação (texto livre, falsos positivos) |
 | Skill | Uma skill de consulta citada, com a linha do tempo como exemplo interno | Skill de linha do tempo separada: estreita |
 | Instruções no retorno da ferramenta | Não: o retorno só tem dados estruturados | Instruções no retorno misturam o canal de instrução com o de dado, que é o vetor do P4 |
@@ -54,7 +54,7 @@ Verificados nesta data, com as fontes indicadas. Cada passo que depende deles co
 
 ## 4. Arquitetura
 
-Princípio: **lógica separada do protocolo.** As ferramentas são funções Python puras (argumentos → dicionário), testáveis sem MCP. O server é uma camada fina que só as expõe via stdio.
+Princípio: **lógica separada do protocolo.** As ferramentas são funções Python puras (argumentos → dicionário), testáveis sem MCP. O server é uma camada fina que as expõe via stdio e, desde o passo extra do HTTP, via Streamable HTTP com token.
 
 ```
 projeto02/
@@ -66,6 +66,7 @@ projeto02/
 ├── corpus/
 │   ├── raw/ec132-2023.html   # fonte baixada uma vez (versionada)
 │   ├── raw/ec132-2023.meta.json  # url, coletado_em, sha256
+│   ├── raw/lc214-2025.html   # segunda fonte (passo 13a), com o seu .meta.json
 │   ├── dispositivos.json     # gerado pela ingestão (versionado)
 │   └── efeitos_correcoes.yaml
 ├── src/taxlaw/
@@ -73,12 +74,20 @@ projeto02/
 │   │   ├── fetch.py          # único módulo com acesso à rede
 │   │   ├── structure.py      # HTML → dispositivos
 │   │   ├── effects.py        # artigo de vigência → datas de efeito
+│   │   ├── lc_structure.py   # lei compilada (LC 214) → dispositivos, sem a redação tachada
+│   │   ├── lc_effects.py     # art. 544 da LC → vigor e efeitos
 │   │   └── build.py          # junta tudo + correções → dispositivos.json + relatório
 │   ├── guard.py              # detecção de CPF/CNPJ (server e hook)
 │   ├── search.py             # BM25
+│   ├── versions.py           # versão do dispositivo pela data de referência
+│   ├── corpus.py             # leitura do dispositivos.json
 │   ├── tools.py              # buscar_dispositivos / obter_dispositivo
-│   └── server.py             # MCPServer via stdio
+│   ├── server.py             # MCPServer via stdio
+│   └── http.py               # o mesmo server via Streamable HTTP, com token
 ├── hooks/block_taxpayer_ids.py
+├── client/taxlaw_client.py   # cliente de terminal (stdio ou --url)
+├── .kiro/                    # mesmo server, hook e skill para o Kiro
+├── Dockerfile, compose.yaml, deploy/  # publicação na VPS (docs/deploy.md)
 ├── echo/echo_server.py       # passo didático, descartável
 ├── tests/
 └── docs/{steps,diagramas,superpowers/specs,superpowers/plans}/
@@ -250,6 +259,11 @@ Sem testes que chamem LLM: a avaliação do comportamento do modelo é o P3. Ver
 | 5 Depois | 14 | Kiro (critério 1), antecipado em 2026-11-09: `.kiro/settings/mcp.json`, `.kiro/hooks/` com o mesmo script do passo 11 e `.kiro/skills/` como link para a skill do passo 12 |
 | | 13 | capítulos da LC 214: detalhado em [2026-11-09-lc214-capitulos-design.md](2026-11-09-lc214-capitulos-design.md), dividido em 13a, 13b e 13c |
 | | 15 | README de decisões e limites + "o que deu errado" |
+| Extras | cliente | cliente MCP de terminal (`client/taxlaw_client.py`): [spec](2026-11-09-cliente-mcp-design.md), tag `step-cliente` |
+| | http | o server via Streamable HTTP com token e o cliente com `--url`: [spec](2026-11-09-transporte-http-design.md), tag `step-http` |
+| | correções | descrições das ferramentas com a LC 214, mensagem de conexão recusada e teste do 413 sem corrida, tag `step-correcoes` |
+| | deploy | imagem Docker, compose, nginx e roteiro; publicado em `mcpreforma.cristianocarvalho.cloud`: [spec](2026-11-10-deploy-vps-design.md), tag `step-deploy` |
+| | 421 | mensagem clara para o `Host` não permitido, tag `step-421` |
 
 ## 11. Ligação com P3 e P4
 

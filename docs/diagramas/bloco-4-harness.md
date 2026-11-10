@@ -2,6 +2,8 @@
 
 Este diagrama mostra as guardas do P2 e o que cada uma cobre. A regra do P1 vale aqui: **prompt melhora a taxa de acerto; o harness decide o que acontece quando o modelo erra**. A skill é a camada de prompt. O hook, o `server.py` e o `tools.py` são as camadas de código.
 
+> Estas são as guardas do caminho **local**, com o hook do Claude Code. No caminho HTTP não existe o hook, e as proteções (nginx, token, `Host`, tamanho, guarda do server) estão no [bloco 5](bloco-5-http-deploy.md).
+
 ## As guardas
 
 ```mermaid

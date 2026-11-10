@@ -1,7 +1,7 @@
 # P2, extra: transporte Streamable HTTP para o taxlaw (design)
 
 - **Data:** 2026-11-09
-- **Status:** design aprovado em conversa (partes 1 e 2); aguardando revisão desta spec escrita.
+- **Status:** implementado (tag `step-http`) e publicado no passo de deploy. Ajustes posteriores: `step-correcoes` e `step-421`.
 - **Spec principal:** [2026-11-05-mcp-reforma-tributaria-design.md](2026-11-05-mcp-reforma-tributaria-design.md). O stdio continua sendo o transporte do Claude Code e do Kiro. Este passo **acrescenta** o HTTP, sem substituí-lo.
 
 ## 1. Objetivo
