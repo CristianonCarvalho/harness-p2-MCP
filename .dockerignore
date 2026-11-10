@@ -1,0 +1,19 @@
+# Nada disto vai para a imagem (segredos, histórico, testes e o HTML bruto de 5 MB).
+.git
+.venv
+.env
+tests/
+corpus/raw/
+docs/
+traces/
+runs/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+.meister/
+.claude/
+.kiro/
+client/
+echo/
+hooks/
+meister.config.yaml*
