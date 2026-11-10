@@ -1,0 +1,25 @@
+# taxlaw via HTTP na VPS (spec 2026-11-10-deploy-vps-design).
+# Uso: docker compose up -d --build   (na pasta ~/mcpreforma, com o .env ao lado)
+services:
+  taxlaw:
+    build: .
+    image: mcpreforma-taxlaw:latest
+    # Só a própria máquina alcança o container; de fora, só pelo nginx (HTTPS).
+    ports:
+      - "127.0.0.1:8020:8000"
+    # TAXLAW_HTTP_TOKEN (nunca no git: veja .env.example).
+    env_file: .env
+    environment:
+      TAXLAW_ALLOWED_HOST: ${TAXLAW_ALLOWED_HOST:-mcpreforma.cristianocarvalho.cloud}
+    restart: unless-stopped
+    # Endurecimento: sistema de arquivos só de leitura, nenhuma capacidade de
+    # kernel, sem ganho de privilégio e com teto de memória e CPU.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
+    mem_limit: 512m
+    cpus: 1.0
