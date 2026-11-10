@@ -173,13 +173,18 @@ def build_server(ctx: tools.Context | None = None, *, today: date | None = None)
 
     @server.tool(annotations=READ_ONLY)
     def buscar_dispositivos(
-        consulta: Annotated[str, Field(description="Palavras a buscar no texto da EC 132/2023 e dos dispositivos da CF e do ADCT que ela inclui ou altera (1 a 500 caracteres).")],
+        consulta: Annotated[str, Field(description="Palavras a buscar no texto da EC 132/2023 (e dos dispositivos da CF e do ADCT que ela inclui ou altera) e dos capítulos do corpus da LC 214/2025 (1 a 500 caracteres).")],
         data_referencia: Annotated[str | None, DATE_FIELD] = None,
         # strict: sem isso o pydantic aceitaria True e "5" como inteiros, e o
         # server divergiria de tools.py, que os rejeita.
         limite: Annotated[int, Field(strict=True, description="Número máximo de resultados, de 1 a 10.")] = 5,
     ) -> BuscaSaida:
-        """Busca dispositivos da reforma tributária (EC 132/2023) por palavras.
+        """Busca dispositivos da reforma tributária por palavras.
+
+        Corpus: EC 132/2023, com os dispositivos da CF e do ADCT que ela inclui
+        ou altera, e da LC 214/2025 a cesta básica (art. 125), as reduções de
+        30% e 60% (arts. 126 a 142) e as alíquotas do Imposto Seletivo (arts.
+        419 a 423). Os Anexos da LC não estão no corpus.
 
         Cada resultado traz a citação, um trecho, a versão do texto que vale na
         data de referência e as datas de efeito com fundamento. Sem resultado
@@ -196,7 +201,7 @@ def build_server(ctx: tools.Context | None = None, *, today: date | None = None)
     ) -> DispositivoSaida:
         """Texto completo de um dispositivo na versão que vale na data de referência.
 
-        Traz citação, origem na EC, filhos diretos, datas de efeito com
+        Traz citação, origem (artigo da EC 132/2023 ou LC 214/2025), filhos diretos, datas de efeito com
         fundamento, se produz efeitos na data (true, false ou null quando não
         se sabe), as outras versões e observações (redação anterior fora do
         corpus, revogação). Id inexistente: encontrado=false.

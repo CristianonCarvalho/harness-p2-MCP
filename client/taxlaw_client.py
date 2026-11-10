@@ -100,6 +100,21 @@ def http_target(url: str) -> HttpTarget:
 # ------------------------------------------------------------------ MCP (a única parte que fala protocolo)
 
 
+def _contains(exc: BaseException, kind: type[BaseException]) -> bool:
+    """`exc`, ou algo dentro dele (grupos de exceções do anyio, causas), é do tipo `kind`?"""
+    stack, seen = [exc], set()
+    while stack:
+        current = stack.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(current, kind):
+            return True
+        stack += list(getattr(current, "exceptions", ()))
+        stack += [e for e in (current.__cause__, current.__context__) if e is not None]
+    return False
+
+
 def _run(target: StdioServerParameters | HttpTarget, operation):
     """Abre o Client (stdio ou HTTP), roda `operation(client)` com teto de tempo e fecha.
 
@@ -132,6 +147,10 @@ def _run(target: StdioServerParameters | HttpTarget, operation):
     except Exception as exc:  # noqa: BLE001 - qualquer falha de subir/conversar vira código 2
         if 401 in statuses:
             raise ClientError("token recusado pelo server") from None
+        if isinstance(target, HttpTarget) and _contains(exc, httpx2.ConnectError):
+            # Conexão recusada: ninguém escutando na porta (server fora do ar,
+            # ainda subindo ou URL errada). A URL não tem segredo; o token não aparece.
+            raise ClientError(f"não há server escutando em {target.url}") from None
         raise ClientError(f"não consegui falar com o server ({exc.__class__.__name__})") from None
 
 
