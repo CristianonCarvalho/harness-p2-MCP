@@ -52,6 +52,17 @@ def test_lists_exactly_the_two_tools_read_only():
         assert tool.description and tool.output_schema["type"] == "object"
 
 
+def test_descriptions_name_every_norm_in_the_corpus():
+    # Se o corpus ganhar uma fonte, as descrições vistas pelo modelo precisam dizer.
+    labels = {"ec132-2023": "EC 132/2023", "lc214-2025": "LC 214/2025"}
+    assert set(CTX.corpus.fontes) == set(labels), "fonte nova no corpus: atualize as descrições e este teste"
+    search = next(t for t in run(lambda c: c.list_tools()).tools if t.name == "buscar_dispositivos")
+    for label in labels.values():
+        assert label in search.description, label
+        assert label in search.input_schema["properties"]["consulta"]["description"], label
+    assert "Anexos" in search.description
+
+
 def test_input_schemas_match_the_spec():
     by_name = {t.name: t for t in run(lambda c: c.list_tools()).tools}
     search = by_name["buscar_dispositivos"].input_schema

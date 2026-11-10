@@ -140,8 +140,10 @@ def test_client_with_wrong_or_missing_token_is_exit_2_without_echo(server, capsy
 
 
 def test_client_cannot_reach_a_closed_port(capsys, monkeypatch):
-    code, _, err = run_cli(capsys, monkeypatch, f"http://127.0.0.1:{free_port()}/mcp", "ferramentas")
-    assert code == 2 and "não consegui falar com o server" in err and TOKEN not in err
+    # Conexão recusada (server fora do ar ou ainda subindo) diz isso, com a URL.
+    url = f"http://127.0.0.1:{free_port()}/mcp"
+    code, _, err = run_cli(capsys, monkeypatch, url, "ferramentas")
+    assert code == 2 and f"não há server escutando em {url}" in err and TOKEN not in err
 
 
 def test_client_rejects_url_and_server_together():
@@ -159,8 +161,20 @@ def test_unknown_host_header_is_refused(server):
 
 
 def test_body_over_the_limit_is_413(server):
-    status, _ = post(server, body=b"x" * (MAX_BODY_BYTES + 1), headers={"authorization": f"Bearer {TOKEN}"})
-    assert status == 413
+    # Só os cabeçalhos, por socket cru: o SDK decide pelo Content-Length antes de
+    # ler o corpo. Mandar 64 KB de verdade dava corrida: o server responde 413 e
+    # fecha antes de o cliente terminar de enviar, e às vezes vinha um "connection
+    # reset" no lugar do 413 (falha intermitente achada no passo seguinte).
+    host, port = server.removeprefix("http://").split("/")[0].split(":")
+    request = (
+        f"POST /mcp HTTP/1.1\r\nHost: {host}:{port}\r\nAuthorization: Bearer {TOKEN}\r\n"
+        f"Content-Type: application/json\r\nAccept: application/json, text/event-stream\r\n"
+        f"Content-Length: {MAX_BODY_BYTES + 1}\r\nConnection: close\r\n\r\n"
+    )
+    with socket.create_connection((host, int(port)), timeout=10) as conn:
+        conn.sendall(request.encode())
+        status_line = conn.recv(1024).split(b"\r\n", 1)[0]
+    assert status_line.split()[1] == b"413", status_line
 
 
 # ------------------------------------------------------------------ partida
