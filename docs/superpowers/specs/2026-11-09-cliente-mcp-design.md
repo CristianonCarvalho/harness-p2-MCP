@@ -1,7 +1,7 @@
 # P2, extra: cliente MCP para o taxlaw (design)
 
 - **Data:** 2026-11-09
-- **Status:** design aprovado em conversa (partes 1 e 2); aguardando revisão desta spec escrita.
+- **Status:** implementado (tag `step-cliente`). O `--url` veio depois, com o transporte HTTP, e a mensagem do 421, em `step-421`.
 - **Spec principal:** [2026-11-05-mcp-reforma-tributaria-design.md](2026-11-05-mcp-reforma-tributaria-design.md). Este cliente não muda o server nem as ferramentas.
 
 ## 1. Objetivo

@@ -9,7 +9,7 @@
   - uma tabela de decisões, com o porquê de cada uma;
   - os limites conhecidos, ditos sem rodeio.
 - **`docs/o-que-deu-errado.md`:** 11 falhas reais em ordem de gravidade, com onde, o que aconteceu e a situação; e as 6 lições que elas ensinam.
-- Nenhum código mudou. O passo 13 (LC 214) ficou para depois: escopo pode ser cortado, critério não.
+- Nenhum código mudou. O passo 13 (LC 214) ficou para depois, porque escopo pode ser cortado e critério não. Ele foi feito em seguida (13a, 13b e 13c), junto com o cliente, o HTTP e o deploy, e o README e o "o que deu errado" foram atualizados no passo 16 (`16-documentacao.md`).
 
 ## Como rodar
 

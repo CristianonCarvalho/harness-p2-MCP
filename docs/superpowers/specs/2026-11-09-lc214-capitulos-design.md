@@ -1,7 +1,7 @@
 # P2, passo 13: capítulos da LC 214/2025 no corpus (design)
 
 - **Data:** 2026-11-09
-- **Status:** design aprovado em conversa (partes 1 a 3); aguardando revisão desta spec escrita.
+- **Status:** implementado nos passos 13a, 13b e 13c (tags `step-13a`, `step-13b` e `step-13c`).
 - **Spec principal:** [2026-11-05-mcp-reforma-tributaria-design.md](2026-11-05-mcp-reforma-tributaria-design.md). Esta spec detalha a linha "13: capítulos da LC 214" da seção 10 da principal. O que não está escrito aqui segue a principal.
 
 ## 1. Objetivo

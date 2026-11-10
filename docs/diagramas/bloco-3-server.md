@@ -2,6 +2,8 @@
 
 Este diagrama mostra a primeira consulta real (2026-11-08, Claude Code com o server `taxlaw` via stdio, revisão `2026-07-28`). A pergunta foi: *"Pela EC 132, o IBS integra a própria base de cálculo em 2030? Cite o dispositivo."*
 
+> Este diagrama é do caminho **local, via stdio**. O caminho remoto (HTTPS, nginx, token) está no [bloco 5](bloco-5-http-deploy.md).
+
 ## Sequência de uma consulta
 
 ```mermaid
